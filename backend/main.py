@@ -23,6 +23,21 @@ CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o
 RECOVERY_SECRET = os.getenv("RECOVERY_SECRET", "foodyDevRecover123")
 
 app = FastAPI(title=APP_NAME, version="1.0")
+from fastapi.middleware.cors import CORSMiddleware
+
+ALLOWED_ORIGINS = [
+    "https://foodyweb-production.up.railway.app",
+    "https://foodybot-production.up.railway.app",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],  # Content-Type и т.п.
+    max_age=86400,
+)
 
 # CORS before routes
 app.add_middleware(
