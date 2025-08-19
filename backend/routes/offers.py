@@ -1,16 +1,14 @@
 # backend/routes/offers.py
-# Minimal, additive router to enable PATCH/DELETE for merchant offers.
-# Assumes you already have SQLAlchemy models Offer, Restaurant and a get_db() dependency.
+# Router to enable PATCH/DELETE for merchant offers.
 # Auth: X-Foody-Key header (same as other merchant endpoints).
 
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy.orm import Session
 from typing import Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
 
-# Import your existing DB session generator and models.
-# Adjust import paths if your project structure differs.
+# Adjust imports to your project layout if needed.
 from backend.db import get_db  # noqa: F401
 from backend.models import Offer, Restaurant  # noqa: F401
 
@@ -76,12 +74,16 @@ def update_offer(
     return offer  # matches shape returned by your GET list endpoint
 
 
-@router.delete("/{offer_id}", status_code=204)
+@router.delete("/{offer_id}", status_code=status.HTTP_200_OK)
 def delete_offer(
     offer_id: int,
     db: Session = Depends(get_db),
     x_foody_key: Optional[str] = Header(None, convert_underscores=False, alias="X-Foody-Key"),
 ):
+    """
+    Return 200 JSON on successful delete to avoid 404-followup UX glitches on the front.
+    Front can now optimistically remove the card without hard refresh.
+    """
     restaurant = _auth_restaurant(db, x_foody_key)
 
     offer = db.query(Offer).filter(Offer.id == offer_id).first()
@@ -92,4 +94,4 @@ def delete_offer(
 
     db.delete(offer)
     db.commit()
-    # 204 No Content is returned by the decorator
+    return {"ok": True, "deleted_id": offer_id}
