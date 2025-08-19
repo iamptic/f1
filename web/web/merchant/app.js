@@ -19,8 +19,8 @@
     const authed = isAuthed();
     $$('.need-auth').forEach(el => el.classList.toggle('hidden', authed));
     const dash = $('#section-dashboard') || $('.merchant-dashboard'); if (dash) dash.classList.toggle('hidden', !authed);
-    const tabs = $('#tabs'); if (tabs) tabs.style.display = authed ? '' : 'none';
-    const logoutBtn = $('#logoutBtn'); if (logoutBtn) logoutBtn.style.display = authed ? '' : 'none';
+    const tabs = $('#tabs'); if (tabs) tabs.style.display = '';
+    const logoutBtn = $('#logoutBtn'); if (logoutBtn) logoutBtn.style.display = '';
   }
   window.FOODY.getAuth = getAuth;
   window.FOODY.isAuthed = isAuthed;
@@ -188,7 +188,18 @@
   })();
 
   // ---------------- Init ----------------
-  document.addEventListener('DOMContentLoaded', ()=>{
+  function bootstrapAuthFromParams(){
+      try{
+        const u=new URL(location.href);
+        const api_key=u.searchParams.get('api_key')||u.hash.match(/api_key=([^&]+)/)?.[1];
+        const rid=u.searchParams.get('restaurant_id')||u.hash.match(/restaurant_id=(\d+)/)?.[1];
+        if(api_key && rid){
+          localStorage.setItem('foody_auth', JSON.stringify({api_key:api_key, restaurant_id:Number(rid)}));
+        }
+      }catch(_){}
+    }
+    document.addEventListener('DOMContentLoaded', ()=>{
+      bootstrapAuthFromParams();
     toggleGateUI();
     setActiveTab((location.hash||'').replace('#','')||'dashboard');
     $('#refreshOffers')?.addEventListener('click', Offers.load);
