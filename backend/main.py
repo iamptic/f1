@@ -576,7 +576,7 @@ async def update_offer(offer_id: int, payload: OfferUpdate = Body(...), request:
             d["expires_at"] = d["expires_at"].astimezone(timezone.utc).isoformat()
         return d
 
-@app.delete("/api/v1/merchant/offers/{offer_id}", status_code=204)
+@app.delete("/api/v1/merchant/offers/{offer_id}", status_code=200)
 async def delete_offer(offer_id: int, request: Request = None):
     api_key = _get_api_key(request) if request else ""
     async with _pool.acquire() as conn:
@@ -587,9 +587,64 @@ async def delete_offer(offer_id: int, request: Request = None):
         await _require_auth(conn, restaurant_id, api_key)
 
         await conn.execute("DELETE FROM offers WHERE id=$1", offer_id)
-        # 204 No Content
-        return
+        # return 200 JSON to avoid follow-up 404 on the front
+        return {"ok": True, "deleted_id": offer_id}
 # --- end PATCH/DELETE block ---
+
+
+
+@app.get("/api/v1/public/offers")
+async def public_offers(city: str | None = None, category: str | None = None, limit: int = 20, offset: int = 0):
+    """
+    Buyer-facing feed of active offers.
+    Active = (expires_at is NULL OR expires_at > now()) AND (qty_left is NULL OR qty_left > 0)
+    Optional filters: city (by merchants.city, ILIKE %city%), category.
+    Supports simple pagination via limit/offset and returns total count.
+    """
+    # guard
+    if limit < 1: limit = 1
+    if limit > 100: limit = 100
+    if offset < 0: offset = 0
+
+    where = ["(o.expires_at IS NULL OR o.expires_at > now())", "(o.qty_left IS NULL OR o.qty_left > 0)"]
+    params = []
+    if city:
+        where.append("m.city ILIKE $" + str(len(params)+1))
+        params.append(f"%{city}%")
+    if category:
+        where.append("o.category = $" + str(len(params)+1))
+        params.append(category)
+
+    where_sql = " AND ".join(where)
+    count_sql = f"""
+        SELECT COUNT(*) AS cnt
+        FROM offers o
+        JOIN merchants m ON m.id = o.restaurant_id
+        WHERE {where_sql}
+    """
+    list_sql = f"""
+        SELECT o.id, o.restaurant_id, o.title, o.price_cents, o.original_price_cents, o.qty_total, o.qty_left,
+               o.expires_at, o.image_url, o.category, o.description
+        FROM offers o
+        JOIN merchants m ON m.id = o.restaurant_id
+        WHERE {where_sql}
+        ORDER BY (o.expires_at IS NULL) DESC, o.expires_at ASC, o.created_at DESC
+        LIMIT ${len(params)+1} OFFSET ${len(params)+2}
+    """
+
+    async with _pool.acquire() as conn:
+        # total
+        row = await conn.fetchrow(count_sql, *params)
+        total = int(row["cnt"]) if row and "cnt" in row else 0
+        # items
+        items = []
+        rows = await conn.fetch(list_sql, *params, limit, offset)
+        for r in rows:
+            d = dict(r)
+            if d.get("expires_at"):
+                d["expires_at"] = d["expires_at"].astimezone(timezone.utc).isoformat()
+            items.append(d)
+        return {"total": total, "limit": limit, "offset": offset, "items": items}
 
 @app.get("/")
 async def root():
