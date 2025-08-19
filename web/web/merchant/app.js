@@ -118,6 +118,7 @@
     state.rid = ''; state.key = ''; showToast('Вы вышли');
     toggleLogout(false); activateTab('auth');
     const tabs = $('#tabs'); if (tabs) tabs.style.display = 'none';
+    try { refreshDashboard(); } catch(_) {}
     const bn = $('.bottom-nav'); if (bn) bn.style.display = 'none';
   });
 
@@ -624,6 +625,7 @@ function bindExpirePresets(){
           price: Number($('#editPrice').value||0),
           qty_total: Number($('#editQty').value||0),
           expires_at: toIsoLocal($('#editExpires').value||''),
+          best_before: toIsoLocal($('#editBest').value||''),
           category: $('#editCategory').value || 'other',
           description: $('#editDesc').value.trim()
         };
@@ -725,43 +727,26 @@ async function refreshDashboard(){
 }
 
 
-// --- Helpers for robust API POST (offers) ---
+
 function foodyBase() {
-  try {
-    return (window.__FOODY__ && window.__FOODY__.FOODY_API) || window.foodyApi || '';
-  } catch(_) { return ''; }
+  try { return (window.__FOODY__ && window.__FOODY__.FOODY_API) || window.foodyApi || ''; }
+  catch(_) { return ''; }
 }
 function joinApi(path) {
   const base = foodyBase();
   if (/^https?:\/\//i.test(path)) return path;
   if (/^https?:\/\//i.test(base)) return base.replace(/\/+$/, '') + path;
-  return path; // fallback to relative
+  return path;
 }
+// --- Helpers for robust API POST (offers) ---
+
 
 
 // --- Strong auth POST for offers (header X-Foody-Key, no query fallbacks) ---
-function foodyBase() {
-  try { return (window.__FOODY__ && window.__FOODY__.FOODY_API) || window.foodyApi || ''; }
-  catch(_) { return ''; }
-}
-function joinApi(path) {
-  const base = foodyBase();
-  if (/^https?:\/\//i.test(path)) return path;
-  if (/^https?:\/\//i.test(base)) return base.replace(/\/+$/, '') + path;
-  return path;
-}
 
 
-function foodyBase() {
-  try { return (window.__FOODY__ && window.__FOODY__.FOODY_API) || window.foodyApi || ''; }
-  catch(_) { return ''; }
-}
-function joinApi(path) {
-  const base = foodyBase();
-  if (/^https?:\/\//i.test(path)) return path;
-  if (/^https?:\/\//i.test(base)) return base.replace(/\/+$/, '') + path;
-  return path;
-}
+
+
 async function postOfferStrict(payload) {
   const url = joinApi('/api/v1/merchant/offers');
   const headers = { 'Content-Type': 'application/json' };
