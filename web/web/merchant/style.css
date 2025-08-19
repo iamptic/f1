@@ -425,10 +425,3 @@ section#profile .card form :is(button[type="submit"], .actions button[type="subm
 .tag{display:inline-block;border:1px solid var(--border);border-radius:10px;padding:6px 10px;font-size:12px;color:var(--text);background:#0f172a}
 .badge-ok{background:rgba(34,197,94,.15);border-color:rgba(34,197,94,.45);color:#86efac}
 .badge-warn{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.45);color:#fca5a5}
-
-
-/* --- Auth tabs hard toggle (robust) --- */
-.auth-forms[data-mode="login"] #loginForm{ display:grid !important; }
-.auth-forms[data-mode="login"] #registerForm{ display:none !important; }
-.auth-forms[data-mode="register"] #loginForm{ display:none !important; }
-.auth-forms[data-mode="register"] #registerForm{ display:grid !important; }

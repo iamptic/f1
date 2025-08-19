@@ -314,47 +314,20 @@ function bindExpirePresets(){
     });
   }
 
-  
-function bindAuthToggle(){
-  const loginForm = $('#loginForm');
-  const regForm = $('#registerForm');
-  const modeLogin = $('#mode-login');
-  const modeReg = $('#mode-register');
-  const forms = $('.auth-forms');
-
-  function setMode(mode){
-    if (forms) forms.setAttribute('data-mode', mode === 'register' ? 'register' : 'login');
-    if (loginForm) loginForm.style.display = (mode === 'register') ? 'none' : 'grid';
-    if (regForm) regForm.style.display   = (mode === 'register') ? 'grid' : 'none';
-    const le = $('#loginError'); if (le) le.classList.add('hidden');
-    const re = $('#registerError'); if (re) re.classList.add('hidden');
-  }
-  function applyFromRadios(){
-    const showLogin = modeLogin ? modeLogin.checked : true;
-    setMode(showLogin ? 'login' : 'register');
-  }
-  // listeners
-  if (modeLogin) modeLogin.addEventListener('change', applyFromRadios);
-  if (modeReg) modeReg.addEventListener('change', applyFromRadios);
-  // also catch label clicks (some CSS hides radios)
-  const labelsWrap = document.querySelector('.auth-switch .labels');
-  if (labelsWrap){
-    labelsWrap.addEventListener('click', (e) => {
-      const lab = e.target.closest('label'); if (!lab) return;
-      const forId = lab.getAttribute('for');
-      if (forId === 'mode-login') setMode('login');
-      if (forId === 'mode-register') setMode('register');
-    });
-  }
-  // default
-  if (forms && !forms.getAttribute('data-mode')) setMode('login');
-  try { applyFromRadios(); } catch(e) { console.warn('auth toggle init failed', e); }
-  // as safety, re-apply after window load in case other scripts touched DOM
-  window.addEventListener('load', () => {
-    try { applyFromRadios(); } catch(_){}
-  });
-}
-
+  function bindAuthToggle(){
+    const loginForm = $('#loginForm');
+    const regForm = $('#registerForm');
+    const modeLogin = $('#mode-login');
+    const modeReg = $('#mode-register');
+    const forms = $('.auth-forms');
+    function apply(){
+      const showLogin = modeLogin ? modeLogin.checked : true;
+      if (loginForm) loginForm.style.display = showLogin ? 'grid' : 'none';
+      if (regForm) regForm.style.display = showLogin ? 'none' : 'grid';
+      if (forms) forms.setAttribute('data-mode', showLogin ? 'login' : 'register');
+      const le = $('#loginError'); if (le) le.classList.add('hidden');
+      const re = $('#registerError'); if (re) re.classList.add('hidden');
+    }
     if (modeLogin) modeLogin.addEventListener('change', apply);
     if (modeReg) modeReg.addEventListener('change', apply);
     try { apply(); } catch(e) { console.warn('auth toggle init failed', e); }
@@ -368,7 +341,6 @@ function bindAuthToggle(){
   setupPwToggle('pwOldToggle','pwOld');
   setupPwToggle('pwNewToggle','pwNew');
   bindAuthToggle();
-  document.addEventListener('DOMContentLoaded', bindAuthToggle);
 
   function showInlineError(id, text){
     const el = $(id); if (!el) { showToast(text); return; }
