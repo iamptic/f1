@@ -118,7 +118,6 @@
     state.rid = ''; state.key = ''; showToast('Вы вышли');
     toggleLogout(false); activateTab('auth');
     const tabs = $('#tabs'); if (tabs) tabs.style.display = 'none';
-    try { refreshDashboard(); } catch(_) {}
     const bn = $('.bottom-nav'); if (bn) bn.style.display = 'none';
   });
 
@@ -625,7 +624,6 @@ function bindExpirePresets(){
           price: Number($('#editPrice').value||0),
           qty_total: Number($('#editQty').value||0),
           expires_at: toIsoLocal($('#editExpires').value||''),
-          best_before: toIsoLocal($('#editBest').value||''),
           category: $('#editCategory').value || 'other',
           description: $('#editDesc').value.trim()
         };
@@ -727,6 +725,32 @@ async function refreshDashboard(){
 }
 
 
+// --- Helpers for robust API POST (offers) ---
+function foodyBase() {
+  try {
+    return (window.__FOODY__ && window.__FOODY__.FOODY_API) || window.foodyApi || '';
+  } catch(_) { return ''; }
+}
+function joinApi(path) {
+  const base = foodyBase();
+  if (/^https?:\/\//i.test(path)) return path;
+  if (/^https?:\/\//i.test(base)) return base.replace(/\/+$/, '') + path;
+  return path; // fallback to relative
+}
+
+
+// --- Strong auth POST for offers (header X-Foody-Key, no query fallbacks) ---
+function foodyBase() {
+  try { return (window.__FOODY__ && window.__FOODY__.FOODY_API) || window.foodyApi || ''; }
+  catch(_) { return ''; }
+}
+function joinApi(path) {
+  const base = foodyBase();
+  if (/^https?:\/\//i.test(path)) return path;
+  if (/^https?:\/\//i.test(base)) return base.replace(/\/+$/, '') + path;
+  return path;
+}
+
 
 function foodyBase() {
   try { return (window.__FOODY__ && window.__FOODY__.FOODY_API) || window.foodyApi || ''; }
@@ -738,15 +762,6 @@ function joinApi(path) {
   if (/^https?:\/\//i.test(base)) return base.replace(/\/+$/, '') + path;
   return path;
 }
-// --- Helpers for robust API POST (offers) ---
-
-
-
-// --- Strong auth POST for offers (header X-Foody-Key, no query fallbacks) ---
-
-
-
-
 async function postOfferStrict(payload) {
   const url = joinApi('/api/v1/merchant/offers');
   const headers = { 'Content-Type': 'application/json' };
@@ -984,3 +999,104 @@ if (!ok) activateTab('auth');
     btn.setAttribute('aria-pressed', (!isText).toString());
     if (!isText) { input.setAttribute('data-pwd-is-text','1'); } else { input.removeAttribute('data-pwd-is-text'); }
   });
+
+/* === Foody merchant embedded fixes === */
+(function(){
+  window.FOODY = window.FOODY || {};
+  const NS = window.FOODY;
+
+  // Gate & Dashboard toggle
+  NS.getAuth = NS.getAuth || function(){
+    try{ const s = localStorage.getItem('foody_auth'); return s ? JSON.parse(s) : null; }catch(_){ return null; }
+  };
+  NS.isAuthed = NS.isAuthed || function(){
+    const a = NS.getAuth(); return !!(a && a.restaurant_id && a.api_key);
+  };
+  NS.toggleUI = function(){
+    const authed = NS.isAuthed();
+    document.querySelectorAll('.need-auth').forEach(el => el.style.display = authed ? 'none' : '');
+    document.querySelectorAll('.merchant-dashboard').forEach(el => el.style.display = authed ? '' : 'none');
+    const logoutBtn = document.getElementById('logoutBtn'); if (logoutBtn) logoutBtn.style.display = authed ? '' : 'none';
+  };
+  document.addEventListener('DOMContentLoaded', function(){
+    NS.toggleUI();
+    window.addEventListener('storage', e => { if (e.key === 'foody_auth') NS.toggleUI(); });
+  });
+
+  // Back to LK handler
+  document.addEventListener('DOMContentLoaded', function(){
+    const btn = document.getElementById('backToLK') || document.querySelector('[data-back-to-lk]');
+    if (btn){
+      btn.addEventListener('click', () => {
+        const prof = document.getElementById('section-profile');
+        const dash = document.getElementById('section-dashboard') || document.querySelector('.merchant-dashboard');
+        if (prof) prof.classList.add('hidden');
+        if (dash) dash.classList.remove('hidden');
+        NS.toggleUI();
+      });
+    }
+  });
+
+  // Modal open/close for city/edit (namespaced to avoid clash)
+  NS.openModal = NS.openModal || function(id){
+    const el = document.getElementById(id); if (!el) return;
+    document.body.classList.add('modal-open'); el.classList.remove('hidden');
+    const m = el.querySelector('.modal'); if (m) m.focus();
+  };
+  NS.closeModal = NS.closeModal || function(id){
+    const el = document.getElementById(id); if (!el) return;
+    el.classList.add('hidden'); document.body.classList.remove('modal-open');
+  };
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape'){
+      const open = document.querySelector('.modal-backdrop:not(.hidden)'); if (open) NS.closeModal(open.id);
+    }
+  });
+
+  // Helpers for datetime <-> ISO
+  function toIsoLocalSafe(s){
+    try{ if (!s) return null; const d = new Date(s); return d.toISOString(); }catch(_){ return null; }
+  }
+  function formatLocalSafe(iso){
+    try{ if (!iso) return ''; const d = new Date(iso);
+      const pad = n => String(n).padStart(2,'0');
+      return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"T"+pad(d.getHours())+":"+pad(d.getMinutes());
+    }catch(_){ return ''; }
+  }
+
+  // Prefill best_before when edit modal opens (if data-* on card)
+  document.addEventListener('click', function(ev){
+    const btn = ev.target.closest('[data-edit-offer-id]'); if (!btn) return;
+    const el = btn.closest('[data-offer]') || btn;
+    const best = el?.dataset?.bestBefore || el?.dataset?.best || '';
+    const input = document.getElementById('editBest');
+    if (input){ input.value = best ? (window.formatLocal?.(best) || formatLocalSafe(best)) : ''; }
+  });
+
+  // Add best_before to PATCH body (wrap fetch once)
+  (function wrapFetchOnce(){
+    if (window.__foody_fetch_wrapped) return;
+    window.__foody_fetch_wrapped = true;
+    const origFetch = window.fetch;
+    window.fetch = async function(url, init){
+      try{
+        if (url && typeof url === 'string' && url.includes('/api/v1/merchant/offers/') && init && init.method && init.method.toUpperCase() === 'PATCH' && typeof init.body === 'string'){
+          const obj = JSON.parse(init.body);
+          const el = document.getElementById('editBest');
+          if (el){
+            const iso = (window.toIsoLocal?.(el.value) || toIsoLocalSafe(el.value));
+            obj.best_before = iso;
+            init.body = JSON.stringify(obj);
+          }
+        }
+      }catch(_){}
+      return origFetch(url, init);
+    };
+  })();
+
+  // After logout, force UI refresh if host exposes refreshDashboard()
+  document.addEventListener('foody:logout', function(){
+    try{ NS.toggleUI(); window.refreshDashboard && window.refreshDashboard(); }catch(_){}
+  });
+})();
+/* === /Foody merchant embedded fixes === */
