@@ -552,6 +552,7 @@ function bindExpirePresets(){
     try {
       const data = await api(`/api/v1/merchant/offers?restaurant_id=${encodeURIComponent(state.rid)}`);
       const list = (data && (data.items || data.results)) ? (data.items || data.results) : (Array.isArray(data) ? data : []);
+      window.__FOODY_STATE__ = window.__FOODY_STATE__ || {}; window.__FOODY_STATE__.offers = list;
       renderOffers(list);
     } catch (err) { console.error(err); if (root) root.innerHTML = '<div class="hint">Не удалось загрузить</div>'; } finally { state._offersLoading = false; }
   }
@@ -603,6 +604,7 @@ function bindExpirePresets(){
         $('#editExpires').value = o.expires_at ? formatLocal(o.expires_at) : (o.expires || '');
         $('#editCategory').value = o.category || 'other';
         $('#editDesc').value = o.description || '';
+        #editBest' in document ? $('#editBest').value = (o.best_before ? formatLocal(o.best_before) : (o.best || '')) : null;
         m.classList.add('_open');
       }
       function formatLocal(iso){
@@ -624,6 +626,7 @@ function bindExpirePresets(){
           price: Number($('#editPrice').value||0),
           qty_total: Number($('#editQty').value||0),
           expires_at: toIsoLocal($('#editExpires').value||''),
+          best_before: toIsoLocal($('#editBest').value||''),
           category: $('#editCategory').value || 'other',
           description: $('#editDesc').value.trim()
         };
@@ -640,11 +643,19 @@ function bindExpirePresets(){
         if (!confirm('Удалить оффер?')) return;
         try {
           await api(`/api/v1/merchant/offers/${id}`, { method: 'DELETE' });
-          row.remove();
+          if (row) row.remove();
           try { refreshDashboard && refreshDashboard(); } catch(_){}
           showToast('Оффер удалён');
         } catch (err) {
-          showToast('Не удалось удалить: '+ (err.message||err));
+          const msg = String(err && err.message || '');
+          if (/404/.test(msg)) {
+            // Treat as success if backend says it's already gone
+            if (row) row.remove();
+            try { refreshDashboard && refreshDashboard(); } catch(_){}
+            showToast('Оффер удалён');
+          } else {
+            showToast('Не удалось удалить: ' + (err.message||err));
+          }
         }
       });
     }
@@ -716,6 +727,7 @@ async function refreshDashboard(){
   try{
     const data = await api(`/api/v1/merchant/offers?restaurant_id=${encodeURIComponent(state.rid)}`);
     const list = data?.items || data?.results || data || [];
+    window.__FOODY_STATE__ = window.__FOODY_STATE__ || {}; window.__FOODY_STATE__.offers = list;
     renderDashboard(list);
   }catch(e){
     if (guest) guest.style.display='block';
