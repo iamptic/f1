@@ -1184,3 +1184,86 @@ if (!ok) activateTab('auth');
   })();
 })();
 /* === /Foody merchant update card (inline) === */
+
+
+/* === Foody merchant tabs fix (resilient) === */
+(function(){
+  const NS = window.FOODY = window.FOODY || {};
+  const $ = (s, r=document) => r.querySelector(s);
+  const $$ = (s, r=document) => r.querySelectorAll(s);
+
+  const SECTION_IDS = ['dashboard','offers','create','profile','qr','reservations','qr_reservations']
+    .map(s => 'section-' + s)
+    .filter(id => document.getElementById(id));
+
+  function norm(name){
+    if (!name) return '';
+    const t = String(name).toLowerCase().trim();
+    // support Russian labels and ids
+    if (t.includes('дашборд') || t.includes('dashboard')) return 'dashboard';
+    if (t.includes('оффер') || t === 'offers') return 'offers';
+    if (t.includes('создат') || t.includes('create')) return 'create';
+    if (t.includes('профил') || t.includes('profile')) return 'profile';
+    if (t.includes('qr') || t.includes('брон') || t.includes('reserve')) return 'qr';
+    return t.replace(/^section-/, '');
+  }
+
+  function setActiveTab(name){
+    const n = norm(name);
+    const id = 'section-' + n;
+    let found = false;
+
+    // hide all known sections
+    const known = SECTION_IDS.length ? SECTION_IDS : Array.from($$('[id^="section-"]'));
+    known.forEach(el => {
+      const show = (el.id === id);
+      el.classList.toggle('hidden', !show);
+      if (show) found = true;
+    });
+
+    // fallback: show first if target not found
+    if (!found && known.length){
+      known[0].classList.remove('hidden');
+    }
+
+    // push active class for buttons
+    $$('.seg-btn, .nav-btn, [data-tab]').forEach(btn => {
+      const key = norm(btn.dataset.tab || btn.dataset.target || btn.dataset.name || (btn.getAttribute('href')||'').replace('#','') || btn.id);
+      btn.classList.toggle('active', key === n);
+    });
+
+    // reflect in hash / dataset
+    try { document.body.dataset.mode = n; } catch(_){}
+    try { history.replaceState(null, '', '#' + n); } catch(_){}
+  }
+
+  // read initial tab
+  function initialTab(){
+    const hash = (location.hash||'').replace('#','');
+    if (hash) return hash;
+    // pick first visible tab by markup order
+    const btn = $('.seg-btn.active, .nav-btn.active, [data-tab].active') || $('.seg-btn, .nav-btn, [data-tab]');
+    if (btn) return btn.dataset.tab || btn.dataset.target || btn.dataset.name || (btn.getAttribute('href')||'').replace('#','') || btn.id;
+    return 'dashboard';
+  }
+
+  // Global API
+  NS.setActiveTab = setActiveTab;
+
+  // click delegates
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.seg-btn, .nav-btn, [data-tab]');
+    if (!btn) return;
+    const name = btn.dataset.tab || btn.dataset.target || btn.dataset.name || (btn.getAttribute('href')||'').replace('#','') || btn.id;
+    if (!name) return;
+    e.preventDefault();
+    setActiveTab(name);
+  });
+
+  // hash navigation support
+  window.addEventListener('hashchange', () => setActiveTab((location.hash||'').replace('#','')));
+
+  // init on DOM ready
+  document.addEventListener('DOMContentLoaded', () => setActiveTab(initialTab()));
+})();
+/* === /Foody merchant tabs fix === */
