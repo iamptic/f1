@@ -1100,3 +1100,87 @@ if (!ok) activateTab('auth');
   });
 })();
 /* === /Foody merchant embedded fixes === */
+
+/* === Foody merchant update card (inline) === */
+(function(){
+  const NS = window.FOODY = window.FOODY || {};
+
+  // Update DOM card/row by offer payload
+  NS.updateOfferCard = function(offer){
+    if (!offer || !offer.id) return;
+    const id = String(offer.id);
+
+    // find container
+    const el = document.querySelector(`[data-offer-id="${id}"]`) ||
+               document.querySelector(`[data-offer][data-offer-id="${id}"]`) ||
+               document.querySelector(`[data-offer-row="${id}"]`);
+    if (!el) return;
+
+    // update data-* for future opens
+    if (el.dataset){
+      el.dataset.title = offer.title ?? el.dataset.title ?? '';
+      el.dataset.description = offer.description ?? el.dataset.description ?? '';
+      el.dataset.category = offer.category ?? el.dataset.category ?? '';
+      if (typeof offer.price_cents === 'number') el.dataset.priceCents = String(offer.price_cents);
+      if (typeof offer.original_price_cents === 'number') el.dataset.originalPriceCents = String(offer.original_price_cents);
+      if (typeof offer.qty_total === 'number') el.dataset.qtyTotal = String(offer.qty_total);
+      if (typeof offer.qty_left === 'number') el.dataset.qtyLeft = String(offer.qty_left);
+      if (offer.expires_at) el.dataset.expiresAt = offer.expires_at;
+      if (offer.best_before) el.dataset.bestBefore = offer.best_before;
+      if (offer.image_url) el.dataset.imageUrl = offer.image_url;
+    }
+
+    // helpers
+    const moneyRub = c => Math.round((c||0)/100).toString() + ' ₽';
+    const timeLeft = iso => {
+      try {
+        if (!iso) return '';
+        const end = new Date(iso).getTime(), now = Date.now();
+        const diff = Math.max(0, end - now);
+        const m = Math.floor(diff/60000), h = Math.floor(m/60), mm = m%60;
+        return h>0 ? `${h}ч ${String(mm).padStart(2,'0')}м` : `${m} мин`;
+      } catch { return ''; }
+    };
+
+    // attempt common targets
+    const setText = (sel, txt) => { const n = el.querySelector(sel); if (n && (txt || txt === 0)) n.textContent = String(txt); };
+    const setImg  = (sel, url) => { const n = el.querySelector(sel); if (n && url) n.src = url; };
+
+    setText('[data-field="title"], .offer-title, .title', offer.title ?? '');
+    setText('[data-field="category"], .offer-category', offer.category ?? '');
+    if (typeof offer.price_cents === 'number') setText('[data-field=\"price\"], .offer-price, .price .cur, .price', moneyRub(offer.price_cents));
+    if (typeof offer.original_price_cents === 'number') setText('[data-field=\"old\"], .offer-old, .old', moneyRub(offer.original_price_cents));
+    if (typeof offer.qty_left === 'number') setText('[data-field=\"qty_left\"], .offer-qty-left, .qty-left, .qty', offer.qty_left);
+    if (typeof offer.qty_total === 'number') setText('[data-field=\"qty_total\"], .offer-qty-total', offer.qty_total);
+    if (offer.expires_at){
+      setText('[data-field=\"expires\"], .offer-expires, .expires', new Date(offer.expires_at).toLocaleString('ru-RU'));
+      const left = timeLeft(offer.expires_at);
+      setText('.badge.left, .time-left', left);
+    }
+    if (offer.image_url) setImg('img, .offer-img img', offer.image_url);
+  };
+
+  // Intercept PATCH responses to offers and auto-update UI
+  (function interceptPatch(){
+    if (window.__foody_patch_update_wrapped) return;
+    window.__foody_patch_update_wrapped = true;
+    const origFetch = window.fetch;
+    window.fetch = async function(url, init){
+      const res = await origFetch(url, init);
+      try{
+        const isPatch = url && typeof url === 'string' && url.includes('/api/v1/merchant/offers/') &&
+                        init && init.method && String(init.method).toUpperCase() === 'PATCH';
+        if (isPatch && res.ok){
+          const clone = res.clone();
+          const ct = clone.headers.get('content-type') || '';
+          if (ct.includes('application/json')){
+            const data = await clone.json().catch(()=>null);
+            if (data && data.id) { try { NS.updateOfferCard(data); } catch(_){ } }
+          }
+        }
+      }catch(_){}
+      return res;
+    };
+  })();
+})();
+/* === /Foody merchant update card (inline) === */
