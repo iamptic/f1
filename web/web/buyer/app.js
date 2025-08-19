@@ -55,6 +55,7 @@
   async function reserve(o){
     try{
       const resp = await fetch(API + '/api/v1/public/reserve', {
+        mode:'cors', cache:'no-store', referrerPolicy:'no-referrer',
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ offer_id: o.id || o.offer_id, name: 'Buyer', phone: '' })
       });
@@ -71,7 +72,7 @@
       const item = offers.find(x => x.id === o.id || x.offer_id === o.offer_id);
       if (item && typeof item.qty_left === 'number') item.qty_left = Math.max(0, item.qty_left - 1);
       render();
-    }catch(e){ console.error(e); toast('Сеть недоступна'); }
+    }catch(e){ console.error(e); toast('Сеть недоступна (CORS?)'); }
   }
 
   function showSkeleton(n=8){
