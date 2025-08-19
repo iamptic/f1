@@ -1,0 +1,9 @@
+
+/* Pretty FilePond area for Create Offer */
+.filepond--root{margin-top:8px;border-radius:16px;border:1px dashed rgba(0,0,0,.15);background:rgba(0,0,0,.03);transition:.2s;}
+.filepond--root:hover,.filepond--root:focus-within{border-color:rgba(0,0,0,.25);background:rgba(0,0,0,.04);box-shadow:0 4px 14px rgba(0,0,0,.06);}
+.filepond--drop-label{font-size:14px;color:#666;}
+.filepond--panel-root{background-color:transparent;}
+.filepond--item-panel{border-radius:12px;}
+.filepond--file-info{font-size:12px;}
+.filepond--image-preview{border-radius:12px;overflow:hidden;}

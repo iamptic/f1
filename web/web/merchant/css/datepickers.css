@@ -1,0 +1,5 @@
+/* Foody v17 — quick date rows for offer create/edit */
+.quick-date-row{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 0}
+.quick-date-row .qd{border:1px solid var(--border,#2a2f3a);background:#171b22;padding:6px 10px;border-radius:10px;cursor:pointer;font-size:13px}
+.quick-date-row .qd:hover{background:#1e2430}
+.field .quick-date-row{margin-top:8px}
