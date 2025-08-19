@@ -30,15 +30,26 @@ ALLOWED_ORIGINS = [
     "https://foodybot-production.up.railway.app",
 ]
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],  # Content-Type и т.п.
+    max_age=86400,
+)
+
 # CORS before routes
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS or ALLOWED_ORIGINS,
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
     expose_headers=["*"],
-)_pool: Optional[asyncpg.Pool] = None
+)
+
+_pool: Optional[asyncpg.Pool] = None
 
 async def _connect_pool():
     global _pool
@@ -225,65 +236,6 @@ async def startup_event():
     await _connect_pool()
     await _migrate()
 
-
-from pydantic import BaseModel
-
-class ReservationCreate(BaseModel):
-    offer_id: int
-    qty: int = 1
-    buyer_phone: str | None = None
-    buyer_name: str | None = None
-
-@app.post("/api/v1/public/reservations")
-async def create_reservation(payload: ReservationCreate):
-    # Anonymous buyer booking; CORS covers origins
-    async with _pool.acquire() as conn:
-        async with conn.transaction():
-            # Check offer
-            row = await conn.fetchrow(
-                "SELECT id, qty_left, expires_at FROM offers WHERE id=$1",
-                payload.offer_id
-            )
-            if not row:
-                raise HTTPException(status_code=404, detail="offer not found")
-
-            # Expiry check
-            exp = row["expires_at"]
-            if exp is not None and exp.tzinfo is not None:
-                now_utc = datetime.now(datetime.timezone.utc)
-                if exp < now_utc:
-                    raise HTTPException(status_code=400, detail="offer expired")
-
-            # Qty check
-            qty_left = int(row["qty_left"] or 0)
-            qty_req = max(1, int(payload.qty or 1))
-            if qty_left < qty_req:
-                raise HTTPException(status_code=409, detail="not enough qty")
-
-            # Decrement and insert reservation atomically
-            await conn.execute(
-                "UPDATE offers SET qty_left = qty_left - $1 WHERE id=$2",
-                qty_req, payload.offer_id
-            )
-            res_row = await conn.fetchrow(
-                """
-                INSERT INTO reservations (offer_id, qty, buyer_phone, buyer_name, status)
-                VALUES ($1,$2,$3,$4,'reserved')
-                RETURNING id, created_at
-                """,
-                payload.offer_id, qty_req, payload.buyer_phone, payload.buyer_name
-            )
-            # Return summary
-            upd = await conn.fetchrow("SELECT qty_left FROM offers WHERE id=$1", payload.offer_id)
-            return {
-                "reservation_id": res_row["id"],
-                "offer_id": payload.offer_id,
-                "qty": qty_req,
-                "qty_left": upd["qty_left"],
-                "status": "reserved",
-                "created_at": (res_row["created_at"].isoformat() if res_row["created_at"] else None)
-            }
-    
 @app.on_event("shutdown")
 async def shutdown_event():
     await _close_pool()
