@@ -16,8 +16,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ru.js"></script>
   <script>window.foodyApi = (window.__FOODY__ && window.__FOODY__.FOODY_API) || window.foodyApi || 'https://foodyback-production.up.railway.app';</script>
   <script defer src="/config.js"></script>
-  <script defer src="./app_merchant_tabsfix.js?v=tabs1"></script>
-
+<script defer src="./app_merchant_tabsfix.js?v=tabs1?v=no247-9"></script>
   <style>
     #cityModal[aria-hidden="true"] { display: none; }
     #cityModal[aria-hidden="false"] { display: block; }
@@ -420,7 +419,42 @@
         </div>
       </section>
 
-    </main>
+    <section id="section-reservations" class="hidden merchant-reservations">
+  <div class="toolbar" style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+    <select id="resvFilter" class="select">
+      <option value="">Все</option>
+      <option value="active">Активные</option>
+      <option value="cancelled">Отменённые</option>
+      <option value="expired">Истекшие</option>
+      <option value="used">Использованные</option>
+    </select>
+    <button id="resvRefresh" class="btn">Обновить</button>
+  </div>
+
+  <div id="resvTableWrap" class="card" style="overflow:auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Оффер</th>
+          <th>Статус</th>
+          <th>Действует до</th>
+          <th>Создано</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="resvTable"></tbody>
+    </table>
+    <div id="resvEmpty" class="muted" style="display:none;padding:12px">Нет бронирований</div>
+  </div>
+
+  <div class="foot" style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+    <span id="resvCount" class="muted"></span>
+    <button id="resvMore" class="btn">Показать ещё</button>
+  </div>
+</section>
+
+</main>
 
     <nav class="bottom-nav">
       <button class="nav-btn active" data-tab="dashboard" title="Дашборд">🏠</button>

@@ -435,3 +435,15 @@ section#profile .card form :is(button[type="submit"], .actions button[type="subm
 body.modal-open{overflow:hidden}
 .hidden{display:none}
 /* === /Foody merchant modal === */
+
+/* === reservations table styles === */
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{border-bottom:1px solid var(--brd);padding:10px 12px;text-align:left;vertical-align:top}
+.table thead th{position:sticky;top:0;background:var(--card);z-index:1}
+.table .act{text-align:right}
+.badge.st-{color:inherit;border:1px solid var(--brd);border-radius:999px;padding:2px 8px;font-size:12px}
+.badge.st-active{border-color:#4ade80;color:#4ade80}
+.badge.st-cancelled{border-color:#f87171;color:#f87171}
+.badge.st-expired{border-color:#fbbf24;color:#fbbf24}
+.badge.st-used{border-color:#60a5fa;color:#60a5fa}
+/* === /reservations table styles === */

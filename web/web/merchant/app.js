@@ -1267,3 +1267,164 @@ if (!ok) activateTab('auth');
   document.addEventListener('DOMContentLoaded', () => setActiveTab(initialTab()));
 })();
 /* === /Foody merchant tabs fix === */
+
+
+/* === Merchant reservations UI === */
+(function(){
+  const NS = window.FOODY = window.FOODY || {};
+  const API = (window.__FOODY__ && window.__FOODY__.FOODY_API) || "https://foodyback-production.up.railway.app";
+  const $ = (s, r=document) => r.querySelector(s);
+  const $$ = (s, r=document) => r.querySelectorAll(s);
+
+  const els = {
+    table: $('#resvTable'),
+    tableWrap: $('#resvTableWrap'),
+    more: $('#resvMore'),
+    filter: $('#resvFilter'),
+    refresh: $('#resvRefresh'),
+    empty: $('#resvEmpty'),
+    count: $('#resvCount'),
+    section: $('#section-reservations'),
+  };
+
+  const st = { items: [], total: null, offset: 0, limit: 20, status: "", loading: false, init: false };
+
+  function fmtDT(iso){
+    try{ return iso ? new Date(iso).toLocaleString('ru-RU') : '—'; }catch(_){ return '—'; }
+  }
+
+  function renderRow(r){
+    const tr = document.createElement('tr');
+    tr.setAttribute('data-resv-id', r.id);
+    const badge = `<span class="badge st-${r.status}">${r.status}</span>`;
+    const act = r.status === 'active' ? `<button class="btn" data-resv-cancel="${r.id}">Отменить</button>` : '';
+    tr.innerHTML = `
+      <td>${r.id}</td>
+      <td>
+        <div class="title">${(r.title||'—')}</div>
+        <div class="muted">#${r.offer_id}</div>
+      </td>
+      <td>${badge}</td>
+      <td>${fmtDT(r.expires_at)}</td>
+      <td>${fmtDT(r.created_at)}</td>
+      <td class="act">${act}</td>
+    `;
+    return tr;
+  }
+
+  function render(){
+    if (!els.table) return;
+    els.table.innerHTML = '';
+    if (!st.items.length){
+      els.empty.style.display = '';
+      els.count.textContent = '';
+      return;
+    }
+    els.empty.style.display = 'none';
+    st.items.forEach(r => els.table.appendChild(renderRow(r)));
+    const shown = st.items.length;
+    const total = st.total ?? shown;
+    els.count.textContent = `Показано ${shown} из ${total}`;
+    if (els.more) els.more.style.display = (st.total !== null && shown < total) ? '' : 'none';
+  }
+
+  async function load(){
+    if (st.loading) return;
+    st.loading = true;
+    try {
+      const auth = NS.getAuth?.();
+      if (!auth) throw new Error('no auth');
+      const u = new URL(API + '/api/v1/merchant/reservations');
+      if (st.status) u.searchParams.set('status_filter', st.status);
+      u.searchParams.set('limit', String(st.limit));
+      u.searchParams.set('offset', String(st.offset));
+      const res = await fetch(u.toString(), { headers: { 'X-Foody-Key': auth.api_key } });
+      if (!res.ok) throw new Error('load');
+      const payload = await res.json();
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      st.total = typeof payload.total === 'number' ? payload.total : items.length;
+      st.items = st.items.concat(items);
+      st.offset += items.length;
+      render();
+    } catch(e){
+      console.error(e);
+      try { NS.toast ? NS.toast('Не удалось загрузить бронирования') : 0; } catch(_){}
+    } finally {
+      st.loading = false;
+    }
+  }
+
+  function reset(){ st.items = []; st.total = null; st.offset = 0; render(); load(); }
+
+  async function cancel(id){
+    if (!id) return;
+    try{
+      const auth = NS.getAuth?.();
+      if (!auth) throw new Error('no auth');
+      const url = API + `/api/v1/merchant/reservations/${id}/cancel`;
+      const res = await fetch(url, { method: 'POST', headers: { 'X-Foody-Key': auth.api_key } });
+      const data = await res.json().catch(()=> ({}));
+      if (!res.ok || !data.ok) throw new Error(data.detail || 'cancel');
+      // mutate local row
+      const row = st.items.find(x => x.id === id);
+      if (row) row.status = 'cancelled';
+      // update DOM
+      const tr = els.table?.querySelector(`[data-resv-id="${id}"]`);
+      if (tr){
+        const stCell = tr.children[2];
+        if (stCell) stCell.innerHTML = `<span class="badge st-cancelled">cancelled</span>`;
+        const actCell = tr.children[5];
+        if (actCell) actCell.innerHTML = '';
+        // flash effect
+        tr.style.transition = 'background-color .4s';
+        tr.style.backgroundColor = 'rgba(248,113,113,.12)';
+        setTimeout(()=> tr.style.backgroundColor = '', 500);
+      }
+      NS.toast ? NS.toast('Бронь отменена') : console.log('cancelled');
+    }catch(e){
+      console.error(e);
+      NS.toast ? NS.toast('Не удалось отменить') : 0;
+    }
+  }
+
+  function bind(){
+    if (els.filter) els.filter.onchange = () => { st.status = els.filter.value || ""; reset(); };
+    if (els.refresh) els.refresh.onclick = () => reset();
+    if (els.more) els.more.onclick = () => load();
+    if (els.tableWrap){
+      els.tableWrap.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-resv-cancel]');
+        if (!btn) return;
+        const id = Number(btn.dataset.resvCancel || 0);
+        if (id) cancel(id);
+      });
+    }
+  }
+
+  function init(){
+    if (st.init) return;
+    st.init = true;
+    bind();
+    // initial query from hash: #reservations:active
+    const hash = (location.hash||'').replace('#','');
+    const [,hashFilter] = hash.split(':');
+    if (hashFilter) {
+      st.status = hashFilter;
+      if (els.filter) els.filter.value = hashFilter;
+    }
+    reset();
+  }
+
+  // Auto-init when tab becomes active
+  window.addEventListener('hashchange', () => {
+    const tab = (location.hash||'').replace('#','').split(':')[0];
+    if (tab === 'reservations') init();
+  });
+  document.addEventListener('DOMContentLoaded', () => {
+    const tab = (location.hash||'').replace('#','').split(':')[0];
+    if (tab === 'reservations') init();
+  });
+
+  NS.openReservations = init;
+})();
+/* === /Merchant reservations UI === */
