@@ -1,8 +1,9 @@
+from os import getenv
 import os
 from typing import Any, Dict, Optional, Set
 
 import asyncpg
-from fastapi import FastAPI, HTTPException, Body, Request
+from fastapi import FastAPI, HTTPException, Body, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from datetime import datetime, timezone, time as dtime
@@ -645,6 +646,77 @@ async def public_offers(city: str | None = None, category: str | None = None, li
                 d["expires_at"] = d["expires_at"].astimezone(timezone.utc).isoformat()
             items.append(d)
         return {"total": total, "limit": limit, "offset": offset, "items": items}
+
+
+# === PATCH: Public reservations endpoint (/api/v1/public/reserve) ===
+RESERVATION_TTL_MINUTES = int(getenv("RESERVATION_TTL_MINUTES", "30"))
+
+class PublicReserveIn(BaseModel):
+    offer_id: int
+    name: str = ""
+    phone: str = ""
+
+@app.post("/api/v1/public/reserve")
+async def public_reserve(payload: PublicReserveIn = Body(...)):
+    """
+    Reserve one unit for an offer:
+      - only if offer is active (not expired) and qty_left > 0
+      - atomically decrement qty_left
+      - create reservation with expires_at = now + TTL
+    Returns: { id, offer_id, expires_at }
+    """
+    from datetime import datetime, timezone, timedelta
+    async with _pool.acquire() as conn:
+        async with conn.transaction():
+            # lock offer to avoid races
+            row = await conn.fetchrow(
+                """
+                SELECT id, qty_left, expires_at
+                FROM offers
+                WHERE id = $1
+                FOR UPDATE
+                """, payload.offer_id
+            )
+            if not row:
+                raise HTTPException(status_code=404, detail="offer not found")
+
+            now = datetime.now(timezone.utc)
+            exp = row["expires_at"]
+            if exp is not None and exp <= now:
+                raise HTTPException(status_code=400, detail="offer expired")
+
+            qty_left = row["qty_left"]
+            if qty_left is not None and qty_left <= 0:
+                raise HTTPException(status_code=400, detail="sold out")
+
+            # decrement qty_left if tracked
+            if qty_left is not None:
+                upd = await conn.execute(
+                    "UPDATE offers SET qty_left = qty_left - 1 WHERE id = $1 AND qty_left > 0",
+                    payload.offer_id
+                )
+                if not upd.endswith("1"):
+                    raise HTTPException(status_code=409, detail="no stock")
+
+            # create reservation
+            r_expires = now + timedelta(minutes=RESERVATION_TTL_MINUTES)
+            res = await conn.fetchrow(
+                """
+                INSERT INTO reservations (offer_id, name, phone, status, expires_at, created_at)
+                VALUES ($1, $2, $3, 'active', $4, $5)
+                RETURNING id, offer_id, expires_at
+                """,
+                payload.offer_id,
+                (payload.name or "").strip(),
+                (payload.phone or "").strip(),
+                r_expires,
+                now,
+            )
+            out = dict(res)
+            if out.get("expires_at"):
+                out["expires_at"] = out["expires_at"].astimezone(timezone.utc).isoformat()
+            return out
+# === /PATCH end ===
 
 @app.get("/")
 async def root():
