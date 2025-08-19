@@ -1,10 +1,7 @@
 :root{
   --bg:#0e1116;--card:#131b24;--text:#e6edf3;--sub:#9fb0bf;--brd:#1f2833;--accent:#60d39f;--accent2:#49b8ff;
 }
-:root[data-theme=light]{
-  --bg:#f5f7fa;--card:#ffffff;--text:#0d1117;--sub:#566272;--brd:#e6edf3;--accent:#2fb07b;--accent2:#2ca2ff;
-}
-html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px/1.45 -apple-system,BlinkMacSystemFont,Inter,Segoe UI,Roboto,Arial}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px/1.45 Inter,Segoe UI,Roboto,Arial}
 .tg-appbar{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:rgba(12,16,22,.74);backdrop-filter:blur(12px);border-bottom:1px solid var(--brd)}
 .tg-appbar__left{display:flex;gap:10px;align-items:center}
 .avatar{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#0e1116;font-weight:800}
@@ -34,12 +31,8 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px/
 .desc{color:var(--sub);margin-top:8px}
 #toast{position:fixed;right:12px;bottom:16px;display:grid;gap:8px;z-index:60}
 .toast{background:#0f141c;border:1px solid var(--brd);border-left:6px solid var(--accent2);padding:10px 12px;border-radius:12px}
-
-/* Skeleton cards for loading */
 .grid.skeleton .card{height:220px; border:1px solid var(--brd); border-radius:16px; background:linear-gradient(90deg,#111722,#141b26,#111722); background-size:200% 100%; animation:shimmer 1.3s linear infinite;}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .hidden{display:none}
 .muted{color:var(--sub)}
-
-/* time-left badge tweaks inside card */
 .badge.left{border-color:rgba(255,255,255,.15); color:var(--sub);}
