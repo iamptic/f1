@@ -314,20 +314,47 @@ function bindExpirePresets(){
     });
   }
 
-  function bindAuthToggle(){
-    const loginForm = $('#loginForm');
-    const regForm = $('#registerForm');
-    const modeLogin = $('#mode-login');
-    const modeReg = $('#mode-register');
-    const forms = $('.auth-forms');
-    function apply(){
-      const showLogin = modeLogin ? modeLogin.checked : true;
-      if (loginForm) loginForm.style.display = showLogin ? 'grid' : 'none';
-      if (regForm) regForm.style.display = showLogin ? 'none' : 'grid';
-      if (forms) forms.setAttribute('data-mode', showLogin ? 'login' : 'register');
-      const le = $('#loginError'); if (le) le.classList.add('hidden');
-      const re = $('#registerError'); if (re) re.classList.add('hidden');
-    }
+  
+function bindAuthToggle(){
+  const loginForm = $('#loginForm');
+  const regForm = $('#registerForm');
+  const modeLogin = $('#mode-login');
+  const modeReg = $('#mode-register');
+  const forms = $('.auth-forms');
+
+  function setMode(mode){
+    if (forms) forms.setAttribute('data-mode', mode === 'register' ? 'register' : 'login');
+    if (loginForm) loginForm.style.display = (mode === 'register') ? 'none' : 'grid';
+    if (regForm) regForm.style.display   = (mode === 'register') ? 'grid' : 'none';
+    const le = $('#loginError'); if (le) le.classList.add('hidden');
+    const re = $('#registerError'); if (re) re.classList.add('hidden');
+  }
+  function applyFromRadios(){
+    const showLogin = modeLogin ? modeLogin.checked : true;
+    setMode(showLogin ? 'login' : 'register');
+  }
+  // listeners
+  if (modeLogin) modeLogin.addEventListener('change', applyFromRadios);
+  if (modeReg) modeReg.addEventListener('change', applyFromRadios);
+  // also catch label clicks (some CSS hides radios)
+  const labelsWrap = document.querySelector('.auth-switch .labels');
+  if (labelsWrap){
+    labelsWrap.addEventListener('click', (e) => {
+      const lab = e.target.closest('label'); if (!lab) return;
+      const forId = lab.getAttribute('for');
+      if (forId === 'mode-login') setMode('login');
+      if (forId === 'mode-register') setMode('register');
+    });
+  }
+  // default
+  if (forms && !forms.getAttribute('data-mode')) setMode('login');
+  try { applyFromRadios(); } catch(e) { console.warn('auth toggle init failed', e); }
+  // as safety, re-apply after window load in case other scripts touched DOM
+  window.addEventListener('load', () => {
+    try { applyFromRadios(); } catch(_){}
+  });
+}
+
     if (modeLogin) modeLogin.addEventListener('change', apply);
     if (modeReg) modeReg.addEventListener('change', apply);
     try { apply(); } catch(e) { console.warn('auth toggle init failed', e); }
@@ -341,6 +368,7 @@ function bindExpirePresets(){
   setupPwToggle('pwOldToggle','pwOld');
   setupPwToggle('pwNewToggle','pwNew');
   bindAuthToggle();
+  document.addEventListener('DOMContentLoaded', bindAuthToggle);
 
   function showInlineError(id, text){
     const el = $(id); if (!el) { showToast(text); return; }
@@ -552,7 +580,6 @@ function bindExpirePresets(){
     try {
       const data = await api(`/api/v1/merchant/offers?restaurant_id=${encodeURIComponent(state.rid)}`);
       const list = (data && (data.items || data.results)) ? (data.items || data.results) : (Array.isArray(data) ? data : []);
-      window.__FOODY_STATE__ = window.__FOODY_STATE__ || {}; window.__FOODY_STATE__.offers = list;
       renderOffers(list);
     } catch (err) { console.error(err); if (root) root.innerHTML = '<div class="hint">Не удалось загрузить</div>'; } finally { state._offersLoading = false; }
   }
@@ -604,7 +631,6 @@ function bindExpirePresets(){
         $('#editExpires').value = o.expires_at ? formatLocal(o.expires_at) : (o.expires || '');
         $('#editCategory').value = o.category || 'other';
         $('#editDesc').value = o.description || '';
-        #editBest' in document ? $('#editBest').value = (o.best_before ? formatLocal(o.best_before) : (o.best || '')) : null;
         m.classList.add('_open');
       }
       function formatLocal(iso){
@@ -626,7 +652,6 @@ function bindExpirePresets(){
           price: Number($('#editPrice').value||0),
           qty_total: Number($('#editQty').value||0),
           expires_at: toIsoLocal($('#editExpires').value||''),
-          best_before: toIsoLocal($('#editBest').value||''),
           category: $('#editCategory').value || 'other',
           description: $('#editDesc').value.trim()
         };
@@ -643,19 +668,11 @@ function bindExpirePresets(){
         if (!confirm('Удалить оффер?')) return;
         try {
           await api(`/api/v1/merchant/offers/${id}`, { method: 'DELETE' });
-          if (row) row.remove();
+          row.remove();
           try { refreshDashboard && refreshDashboard(); } catch(_){}
           showToast('Оффер удалён');
         } catch (err) {
-          const msg = String(err && err.message || '');
-          if (/404/.test(msg)) {
-            // Treat as success if backend says it's already gone
-            if (row) row.remove();
-            try { refreshDashboard && refreshDashboard(); } catch(_){}
-            showToast('Оффер удалён');
-          } else {
-            showToast('Не удалось удалить: ' + (err.message||err));
-          }
+          showToast('Не удалось удалить: '+ (err.message||err));
         }
       });
     }
@@ -727,7 +744,6 @@ async function refreshDashboard(){
   try{
     const data = await api(`/api/v1/merchant/offers?restaurant_id=${encodeURIComponent(state.rid)}`);
     const list = data?.items || data?.results || data || [];
-    window.__FOODY_STATE__ = window.__FOODY_STATE__ || {}; window.__FOODY_STATE__.offers = list;
     renderDashboard(list);
   }catch(e){
     if (guest) guest.style.display='block';
