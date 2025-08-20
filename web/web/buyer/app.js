@@ -1,4 +1,3 @@
-
 (() => {
   const $ = (s, r=document) => r.querySelector(s);
   const API = (window.__FOODY__ && window.__FOODY__.FOODY_API) || "https://foodyback-production.up.railway.app";
@@ -15,7 +14,10 @@
   function render(){
     grid.innerHTML='';
     const term=(q.value||'').toLowerCase();
-    const list = offers.filter(o=>!term||(o.title||'').toLowerCase().includes(term)).filter(o=>(o.qty_left??0)>0 && (!o.expires_at || new Date(o.expires_at).getTime() > Date.now())).sort((a,b)=>new Date(a.expires_at||0)-new Date(b.expires_at||0));
+    const list = offers
+      .filter(o=>!term||(o.title||'').toLowerCase().includes(term))
+      .filter(o=>(o.qty_left??0)>0 && (!o.expires_at || new Date(o.expires_at).getTime() > Date.now()))
+      .sort((a,b)=>new Date(a.expires_at||0)-new Date(b.expires_at||0));
     if(!list.length){ grid.innerHTML='<div class="card"><div class="p">Нет офферов</div></div>'; return; }
     list.forEach(o=>{
       const el=document.createElement('div'); el.className='card';
@@ -46,11 +48,33 @@
     $('#sDesc').textContent=o.description||'';
     const left=timeLeft(o.expires_at); $('#sLeft').textContent=left?('Осталось: '+left):'—';
     $('#sheet').classList.remove('hidden');
+    $('#sheet').setAttribute('aria-hidden','false');
     $('#reserveBtn').onclick = () => reserve(o);
   }
-  $('#sheetClose').onclick = () => $('#sheet').classList.add('hidden');
+  $('#sheetClose').onclick = () => { $('#sheet').classList.add('hidden'); $('#sheet').setAttribute('aria-hidden','true'); };
+  $('#qrClose').onclick = closeQR;
+  $('#qrOk').onclick = closeQR;
+  function closeQR(){ $('#qrModal').classList.add('hidden'); $('#qrModal').setAttribute('aria-hidden','true'); }
+
   $('#refresh').onclick = resetAndLoad;
   q.oninput = render;
+
+  function showQRCode(text){
+    // Normalize to string
+    const payload = String(text||'').trim();
+    const canvas = document.getElementById('qrCanvas');
+    if (!canvas || !window.QRCode) return;
+    // Clear canvas
+    const ctx = canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height);
+    // Draw QR
+    window.QRCode.toCanvas(canvas, payload || 'NO_CODE', { width: 220, margin: 1 }, (err)=>{
+      if (err) console.error(err);
+    });
+    // Text
+    $('#qrCodeText').textContent = payload || '—';
+    // Show modal
+    const m = $('#qrModal'); m.classList.remove('hidden'); m.setAttribute('aria-hidden','false');
+  }
 
   async function reserve(o){
     try{
@@ -72,6 +96,15 @@
       const item = offers.find(x => x.id === o.id || x.offer_id === o.offer_id);
       if (item && typeof item.qty_left === 'number') item.qty_left = Math.max(0, item.qty_left - 1);
       render();
+
+      // закрыть карточку
+      $('#sheet').classList.add('hidden'); $('#sheet').setAttribute('aria-hidden','true');
+
+      // получить код для погашения (универсально берём из возможных полей)
+      const code = data.code || data.reservation_code || data.qr_code || (data.reservation && (data.reservation.code || data.reservation.qr_code));
+      // Если API возвращает прямую ссылку (например, qr_url) — зашиваем в QR саму ссылку, иначе сам код
+      const qrPayload = data.qr_url || data.url || code || '';
+      showQRCode(qrPayload || code || '');
     }catch(e){ console.error(e); toast('Сеть недоступна (CORS?)'); }
   }
 
