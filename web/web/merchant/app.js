@@ -3,10 +3,19 @@
   const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
   const on = (sel, evt, fn) => { const el = $(sel); if (el) el.addEventListener(evt, fn, { passive: false }); };
 
-  const state = {
+  function setCreds(rid, key){
+  try{
+    localStorage.setItem('foody_restaurant_id', String(rid||''));
+    localStorage.setItem('foody_key', String(key||''));
+    localStorage.setItem('restaurant_id', String(rid||''));
+    localStorage.setItem('api_key', String(key||''));
+  }catch(_){}
+}
+
+const state = {
     api: (window.__FOODY__ && window.__FOODY__.FOODY_API) || window.foodyApi || 'https://foodyback-production.up.railway.app',
-    rid: localStorage.getItem('foody_restaurant_id') || '',
-    key: localStorage.getItem('foody_key') || '',
+    rid: localStorage.getItem('foody_restaurant_id') || localStorage.getItem('restaurant_id') || '',
+    key: localStorage.getItem('foody_key') || localStorage.getItem('api_key') || '',
   };
 
   const KNOWN_CITIES = ["Москва","Санкт-Петербург","Казань","Екатеринбург","Сочи","Новосибирск","Нижний Новгород","Омск","Томск"];
@@ -373,8 +382,7 @@ function bindExpirePresets(){
       if (!r.restaurant_id || !r.api_key) throw new Error('Неожиданный ответ API');
       state.rid = r.restaurant_id; state.key = r.api_key;
       try {
-        localStorage.setItem('foody_restaurant_id', state.rid);
-        localStorage.setItem('foody_key', state.key);
+        setCreds(state.rid, state.key);
         localStorage.setItem('foody_city', city);
         localStorage.setItem('foody_reg_city', city);
         if (work_from) localStorage.setItem('foody_work_from', work_from);
@@ -408,7 +416,7 @@ function bindExpirePresets(){
     try {
       const r = await api('/api/v1/merchant/login', { method: 'POST', body: JSON.stringify(payload) });
       state.rid = r.restaurant_id; state.key = r.api_key;
-      try { localStorage.setItem('foody_restaurant_id', state.rid); localStorage.setItem('foody_key', state.key); } catch(_) {}
+      try { setCreds(state.rid, state.key); } catch(_) {}
       showToast('Вход выполнен ✅');
       gate();
     } catch (err) {
@@ -718,8 +726,6 @@ async function refreshDashboard(){
     const data = await api(`/api/v1/merchant/offers?restaurant_id=${encodeURIComponent(state.rid)}`);
     const list = data?.items || data?.results || data || [];
     renderDashboard(list);
-    try{ renderSoonList(list); }catch(_){}
-    try{ loadReservations(); }catch(_){}
   }catch(e){
     if (guest) guest.style.display='block';
     if (stats) stats.style.display='none';
@@ -886,49 +892,11 @@ async function postOfferStrict(payload) {
       if (msg){ msg.textContent='Не удалось открыть камеру'; msg.className='tag badge-warn'; }
     }
   }
-  
-function initQrTab(){
-  const r = document.getElementById('qr_redeem_btn');
-  const s = document.getElementById('qr_scan_btn');
-  const inp = document.getElementById('qr_code');
-  if (r && !r.dataset.bound){ r.dataset.bound='1'; r.addEventListener('click', ()=> redeem((document.getElementById('qr_code')||{}).value||'')); }
-  if (s && !s.dataset.bound){ s.dataset.bound='1'; s.addEventListener('click', startScan); }
-  if (inp && !inp.dataset.bound){
-    inp.dataset.bound='1';
-    inp.addEventListener('keydown', (ev)=>{ if (ev.key==='Enter'){ ev.preventDefault(); redeem(inp.value||''); }});
-  }
-  // Reservations: filters + load + actions
-  const q = document.getElementById('res_q');
-  const st = document.getElementById('res_status');
-  const more = document.getElementById('res_more');
-  const list = document.getElementById('res_rows');
-  if (q && !q.dataset.bound){
-    q.dataset.bound='1';
-    q.addEventListener('input', ()=>{ if (!state._resv) state._resv={}; state._resv.q = (q.value||'').trim(); loadReservations(true); });
-  }
-  if (st && !st.dataset.bound){
-    st.dataset.bound='1';
-    st.addEventListener('change', ()=>{ if (!state._resv) state._resv={}; state._resv.status = st.value||''; loadReservations(true); });
-  }
-  if (more && !more.dataset.bound){
-    more.dataset.bound='1';
-    more.addEventListener('click', ()=> loadReservations(false));
-  }
-  if (list && !list.dataset.bound){
-    list.dataset.bound='1';
-    list.addEventListener('click', (e)=>{
-      const btn = e.target.closest('[data-resv]'); if (!btn) return;
-      const act = btn.getAttribute('data-resv');
-      const id = btn.getAttribute('data-id') || btn.getAttribute('data-code');
-      if (!act || !id) return;
-      resvAction(act, id);
-    });
-  }
-  // initial load
-  loadReservations(true);
-  try { inp && inp.focus(); } catch(_) {}
-}
-
+  function initQrTab(){
+    const r = document.getElementById('qr_redeem_btn');
+    const s = document.getElementById('qr_scan_btn');
+    const inp = document.getElementById('qr_code');
+    if (r && !r.dataset.bound){ r.dataset.bound='1'; r.addEventListener('click', ()=> redeem((document.getElementById('qr_code')||{}).value||'')); }
     if (s && !s.dataset.bound){ s.dataset.bound='1'; s.addEventListener('click', startScan); }
     if (inp && !inp.dataset.bound){ inp.dataset.bound='1'; inp.addEventListener('keydown', (ev)=>{ if(ev.key==='Enter'){ ev.preventDefault(); redeem(inp.value||''); } }); setTimeout(()=>{ try{ inp.focus(); }catch(_){}} , 50); }
     // reservations bindings
@@ -1113,3 +1081,6 @@ if (!ok) activateTab('auth');
   });
 
   document.addEventListener('visibilitychange', ()=>{ if(document.hidden) try{ stopScan(); }catch(_){}});
+
+
+document.addEventListener('DOMContentLoaded', gate);
