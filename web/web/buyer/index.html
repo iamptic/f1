@@ -23,15 +23,34 @@
 
     <main class="tg-content">
       <div class="toolbar">
-        <input id="q" class="search" placeholder="Поиск" />
+        <input id="q" class="search" placeholder="Поиск по названию" />
+        <select id="cat" class="select"><option value="">Все категории</option></select>
+        <select id="sort" class="select">
+          <option value="expire">Сначала истекающие</option>
+          <option value="near">Ближе ко мне</option>
+          <option value="discount">Больше скидка</option>
+          <option value="cheap">Дешевле</option>
+          <option value="expensive">Дороже</option>
+        </select>
+        <div class="geo">
+          <button id="geoBtn" class="btn">Моя гео</button>
+          <select id="radius" class="select">
+            <option value="">Без радиуса</option>
+            <option value="3">≤3 км</option>
+            <option value="5">≤5 км</option>
+            <option value="10">≤10 км</option>
+            <option value="20">≤20 км</option>
+          </select>
+        </div>
         <button id="refresh" class="btn">Обновить</button>
       </div>
+      <div id="geoNote" class="muted small"></div>
       <div id="grid" class="grid"></div>
       <div id="gridSkeleton" class="grid skeleton hidden"></div>
     </main>
   </div>
 
-  <!-- Bottom Sheet (offer details + reserve form) -->
+  <!-- Bottom Sheet (offer details) -->
   <div id="sheet" class="sheet hidden" aria-hidden="true">
     <div class="sheet__dialog">
       <div class="sheet__h">
@@ -46,28 +65,7 @@
           <div id="sQty" class="qty">—</div>
           <div id="sExp" class="exp">—</div><div id="sLeft" class="left muted">—</div>
         </div>
-
-        <div class="reserve-form">
-          <div class="row">
-            <label for="sName">Имя</label>
-            <input id="sName" placeholder="Как к вам обращаться">
-          </div>
-          <div class="row">
-            <label for="sPhone">Телефон</label>
-            <input id="sPhone" placeholder="+7...">
-          </div>
-          <div class="row">
-            <label for="sAddress">Адрес (автозаполнение по гео)</label>
-            <div class="address-line">
-              <input id="sAddress" placeholder="Ваш адрес (можно отредактировать)" />
-              <button id="geoBtn" class="btn small" type="button">Определить гео</button>
-            </div>
-            <div class="hint muted">Мы возьмём адрес из вашей геолокации — вы сможете поправить вручную.</div>
-            <input type="hidden" id="sLat">
-            <input type="hidden" id="sLng">
-          </div>
-        </div>
-
+        <div class="desc" id="sDesc">—</div>
         <div class="actions"><button id="reserveBtn" class="btn primary">Забронировать</button></div>
       </div>
     </div>
