@@ -1,135 +1,1086 @@
 (() => {
   const $ = (s, r=document) => r.querySelector(s);
-  const API = (window.__FOODY__ && window.__FOODY__.FOODY_API) || "https://foodyback-production.up.railway.app";
+  const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+  const on = (sel, evt, fn) => { const el = $(sel); if (el) el.addEventListener(evt, fn, { passive: false }); };
 
-  let offers = []; let total=null; let offset=0; const LIMIT=12; let loading=false;
-  const grid = $('#grid'), gridSkeleton = $('#gridSkeleton'), q=$('#q');
+  function setCreds(rid, key){
+  try{
+    localStorage.setItem('foody_restaurant_id', String(rid||''));
+    localStorage.setItem('foody_key', String(key||''));
+    localStorage.setItem('restaurant_id', String(rid||''));
+    localStorage.setItem('api_key', String(key||''));
+  }catch(_){}
+}
 
-  function timeLeft(iso){ try{ if(!iso) return ''; const diff=Math.max(0,new Date(iso).getTime()-Date.now()); const m=Math.floor(diff/60000), h=Math.floor(m/60), mm=m%60; return h>0? `${h}ч ${String(mm).padStart(2,'0')}м` : `${m} мин`; }catch{ return ''; } }
-  function money(c){ return Math.round((c||0)/100)+' ₽'; }
-  function disc(p, o){ const price=(p||0)/100, old=(o||0)/100; return (old>0&&price>0)?Math.max(0,Math.round((1-price/old)*100)):0; }
-  const toastBox = document.getElementById('toast') || (()=>{ const d=document.createElement('div'); d.id='toast'; document.body.appendChild(d); return d; })();
-  const toast = (m) => { const el=document.createElement('div'); el.className='toast'; el.textContent=m; toastBox.appendChild(el); setTimeout(()=>el.remove(), 3200); };
+const state = {
+    api: (window.__FOODY__ && window.__FOODY__.FOODY_API) || window.foodyApi || 'https://foodyback-production.up.railway.app',
+    rid: localStorage.getItem('foody_restaurant_id') || localStorage.getItem('restaurant_id') || '',
+    key: localStorage.getItem('foody_key') || localStorage.getItem('api_key') || '',
+  };
 
-  function render(){
-    grid.innerHTML='';
-    const term=(q.value||'').toLowerCase();
-    const list = offers
-      .filter(o=>!term||(o.title||'').toLowerCase().includes(term))
-      .filter(o=>(o.qty_left??0)>0 && (!o.expires_at || new Date(o.expires_at).getTime() > Date.now()))
-      .sort((a,b)=>new Date(a.expires_at||0)-new Date(b.expires_at||0));
-    if(!list.length){ grid.innerHTML='<div class="card"><div class="p">Нет офферов</div></div>'; return; }
-    list.forEach(o=>{
-      const el=document.createElement('div'); el.className='card';
-      const d=disc(o.price_cents,o.original_price_cents); const left=timeLeft(o.expires_at);
-      el.innerHTML = `
-        ${o.image_url ? `<img src="${o.image_url}" alt="">` : `<div style="height:140px;background:#0d1218"></div>`}
-        <div class="p">
-          <div class="price">
-            ${money(o.price_cents)}
-            ${d?`<span class="badge">-${d}%</span>`:''}
-            ${left?`<span class="badge left">${left}</span>`:''}
-          </div>
-          <div>${o.title || '—'}</div>
-          <div class="meta"><span>Осталось: ${o.qty_left ?? '—'}</span>${o.category?`<span class="badge">${o.category}</span>`:''}</div>
-        </div>`;
-      el.onclick = () => open(o);
-      grid.appendChild(el);
+  const KNOWN_CITIES = ["Москва","Санкт-Петербург","Казань","Екатеринбург","Сочи","Новосибирск","Нижний Новгород","Омск","Томск"];
+  const CITY_OTHER = "Другой";
+
+  const toastBox = $('#toast');
+  const showToast = (msg) => {
+    if (!toastBox) return alert(msg);
+    try {
+      const now = Date.now();
+      if (!window.__toast) window.__toast = { last:'', ts:0 };
+      if (msg && window.__toast.last === String(msg) && (now - window.__toast.ts) < 1200) return;
+      window.__toast.last = String(msg); window.__toast.ts = now;
+    } catch(_) {}
+    const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg;
+    toastBox.appendChild(el); setTimeout(() => el.remove(), 4200);
+  };
+
+  function toggleLogout(visible){
+    const btn = $('#logoutBtn'); if (!btn) return;
+    btn.style.display = visible ? '' : 'none';
+  }
+
+  function updateCreds(){
+    const el = $('#creds');
+    if (el) el.textContent = JSON.stringify({ restaurant_id: state.rid, api_key: state.key }, null, 2);
+  }
+
+  function formatRuPhone(digits){
+    if (!digits) return '+7 ';
+    if (digits[0] === '8') digits = '7' + digits.slice(1);
+    if (digits[0] === '9') digits = '7' + digits;
+    if (digits[0] !== '7') digits = '7' + digits;
+    digits = digits.replace(/\D+/g,'').slice(0, 11);
+    const rest = digits.slice(1);
+    let out = '+7 ';
+    if (rest.length > 0) out += rest.slice(0,3);
+    if (rest.length > 3) out += ' ' + rest.slice(3,6);
+    if (rest.length > 6) out += ' ' + rest.slice(6,8);
+    if (rest.length > 8) out += ' ' + rest.slice(8,10);
+    return out;
+  }
+  function attachPhoneMask(input){
+    if (!input || input.dataset.maskBound === '1') return;
+    input.dataset.maskBound = '1';
+    input.type = 'tel'; input.inputMode = 'tel'; input.autocomplete = 'tel';
+    const handler = () => {
+      const digits = (input.value || '').replace(/\D+/g,'');
+      input.value = formatRuPhone(digits);
+    };
+    input.addEventListener('input', handler);
+    input.addEventListener('blur', handler);
+    handler();
+  }
+  function getDigits(v){ return (v||'').toString().replace(/\D+/g,''); }
+
+  function setupPwToggle(btnId, inputId){
+    const btn = document.getElementById(btnId);
+    const inp = document.getElementById(inputId);
+    if (!btn || !inp || btn.dataset.bound === '1') return;
+    btn.dataset.bound = '1';
+    const update = (show) => {
+      inp.type = show ? 'text' : 'password';
+      btn.setAttribute('aria-pressed', show ? 'true' : 'false');
+      btn.setAttribute('aria-label', show ? 'Скрыть пароль' : 'Показать пароль');
+      btn.textContent = show ? '🙈' : '👁';
+    };
+    btn.addEventListener('click', () => {
+      const show = inp.type === 'password';
+      update(show);
+      inp.focus({ preventScroll: true });
     });
   }
 
-  function open(o){
-    $('#sTitle').textContent=o.title||'—';
-    $('#sImg').src=o.image_url||'';
-    $('#sPrice').textContent=money(o.price_cents);
-    const old=(o.original_price_cents||0)/100; $('#sOld').textContent=old? (old.toFixed(0)+' ₽'):'—';
-    $('#sQty').textContent=(o.qty_left??'—') + ' / ' + (o.qty_total??'—');
-    $('#sExp').textContent=o.expires_at? new Date(o.expires_at).toLocaleString('ru-RU'):'—';
-    $('#sDesc').textContent=o.description||'';
-    const left=timeLeft(o.expires_at); $('#sLeft').textContent=left?('Осталось: '+left):'—';
-    $('#sheet').classList.remove('hidden');
-    $('#sheet').setAttribute('aria-hidden','false');
-    $('#reserveBtn').onclick = () => reserve(o);
+  function activateTab(tab) {
+    try {
+      $$('.seg-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      $$('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      const panes = $$('.pane');
+      if (panes.length) panes.forEach(p => p.classList.toggle('active', p.id === tab));
+      else { const t = document.getElementById(tab); if (t) t.classList.add('active'); }
+      if (tab === 'offers') loadOffers();
+      if (tab === 'profile') loadProfile();
+      if (tab === 'export') updateCreds();
+      if (tab === 'create') initCreateTab();
+      if (tab === 'qr') initQrTab(); else try{ stopScan(); }catch(_){}
+    } catch (e) { console.warn('activateTab failed', e); }
   }
-  $('#sheetClose').onclick = () => { $('#sheet').classList.add('hidden'); $('#sheet').setAttribute('aria-hidden','true'); };
-  $('#qrClose').onclick = closeQR;
-  $('#qrOk').onclick = closeQR;
-  function closeQR(){ $('#qrModal').classList.add('hidden'); $('#qrModal').setAttribute('aria-hidden','true'); }
+  on('#tabs','click', (e) => { const btn = e.target.closest('.seg-btn'); if (btn?.dataset.tab) activateTab(btn.dataset.tab); });
+  on('.bottom-nav','click', (e) => { const btn = e.target.closest('.nav-btn'); if (btn?.dataset.tab) activateTab(btn.dataset.tab); });
 
-  $('#refresh').onclick = resetAndLoad;
-  q.oninput = render;
-
-  function showQRCode(text){
-    // Normalize to string
-    const payload = String(text||'').trim();
-    const canvas = document.getElementById('qrCanvas');
-    if (!canvas || !window.QRCode) return;
-    // Clear canvas
-    const ctx = canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height);
-    // Draw QR
-    window.QRCode.toCanvas(canvas, payload || 'NO_CODE', { width: 220, margin: 1 }, (err)=>{
-      if (err) console.error(err);
-    });
-    // Text
-    $('#qrCodeText').textContent = payload || '—';
-    // Show modal
-    const m = $('#qrModal'); m.classList.remove('hidden'); m.setAttribute('aria-hidden','false');
+  function gate(){
+    const authed = !!(state.rid && state.key);
+    if (!authed) {
+      activateTab('auth');
+      const tabs = $('#tabs'); if (tabs) tabs.style.display = 'none';
+      const bn = $('.bottom-nav'); if (bn) bn.style.display = 'none';
+      toggleLogout(false);
+      return false;
+    }
+    const tabs = $('#tabs'); if (tabs) tabs.style.display = '';
+    const bn = $('.bottom-nav'); if (bn) bn.style.display = '';
+    activateTab('offers'); try{ refreshDashboard(); }catch(_){ }
+    toggleLogout(true);
+    return true;
   }
 
-  async function reserve(o){
-    try{
-      const resp = await fetch(API + '/api/v1/public/reserve', {
-        mode:'cors', cache:'no-store', referrerPolicy:'no-referrer',
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ offer_id: o.id || o.offer_id, name: 'Buyer', phone: '' })
-      });
-      const data = await resp.json().catch(()=>({}));
-      if(!resp.ok){
-        let msg = data?.detail || 'Не удалось забронировать';
-        if (data?.detail === 'offer expired') msg = 'Оффер истёк';
-        if (data?.detail === 'sold out') msg = 'Остаток закончился';
-        toast(msg);
-        return;
+  on('#logoutBtn','click', () => {
+    try { localStorage.removeItem('foody_restaurant_id'); localStorage.removeItem('foody_key'); } catch(_) {}
+    state.rid = ''; state.key = ''; showToast('Вы вышли');
+    toggleLogout(false); activateTab('auth');
+    const tabs = $('#tabs'); if (tabs) tabs.style.display = 'none';
+    const bn = $('.bottom-nav'); if (bn) bn.style.display = 'none';
+  });
+
+  function dtLocalToIso(v){
+    if (!v) return null;
+    try {
+      const [d, t] = v.split(' ');
+      const [Y,M,D] = d.split('-').map(x=>parseInt(x,10));
+      const [h,m] = (t||'00:00').split(':').map(x=>parseInt(x,10));
+      const dt = new Date(Y, (M-1), D, h, m);
+      return new Date(dt.getTime() - dt.getTimezoneOffset()*60000).toISOString().slice(0,16)+':00Z';
+    } catch(e){ return null; }
+  }
+
+  
+async function api(path, { method='GET', headers={}, body=null, raw=false } = {}) {
+    const url = `${state.api}${path}`;
+    const h = { 'Content-Type': 'application/json', ...headers };
+    if (state.key) h['X-Foody-Key'] = state.key;
+    try {
+      const res = await fetch(url, { method, headers: h, body });
+      // --- Accept 204 No Content without trying to parse JSON
+      if (res.status === 204) { 
+        if (raw) return res; 
+        return null; 
       }
-      toast('Забронировано ✅');
-      // локально уменьшаем остаток
-      const item = offers.find(x => x.id === o.id || x.offer_id === o.offer_id);
-      if (item && typeof item.qty_left === 'number') item.qty_left = Math.max(0, item.qty_left - 1);
-      render();
-
-      // закрыть карточку
-      $('#sheet').classList.add('hidden'); $('#sheet').setAttribute('aria-hidden','true');
-
-      // получить код для погашения (универсально берём из возможных полей)
-      const code = data.code || data.reservation_code || data.qr_code || (data.reservation && (data.reservation.code || data.reservation.qr_code));
-      // Если API возвращает прямую ссылку (например, qr_url) — зашиваем в QR саму ссылку, иначе сам код
-      const qrPayload = data.qr_url || data.url || code || '';
-      showQRCode(qrPayload || code || '');
-    }catch(e){ console.error(e); toast('Сеть недоступна (CORS?)'); }
+      if (!res.ok) {
+        const ct = res.headers.get('content-type')||'';
+        let msg = `${res.status} ${res.statusText}`;
+        if (ct.includes('application/json')) {
+          let j = null;
+          try { j = await res.json(); } catch(_) {}
+          if (j && (j.detail || j.message)) msg = j.detail || j.message || msg;
+        } else {
+          let t = '';
+          try { t = await res.text(); } catch(_) {}
+          if (t) msg += ` — ${t.slice(0,180)}`;
+        }
+        throw new Error(msg);
+      }
+      if (raw) return res;
+      const ct2 = res.headers.get('content-type') || '';
+      if (ct2.includes('application/json')) {
+        try { return await res.json(); } catch(_) { return null; }
+      }
+      try { return await res.text(); } catch(_) { return ''; }
+    } catch (err) {
+      if (String(err.message).includes('Failed to fetch')) throw new Error('Не удалось связаться с сервером. Проверьте соединение или CORS.');
+      throw err;
+    }
   }
 
-  function showSkeleton(n=8){
-    gridSkeleton.innerHTML=''; for(let i=0;i<n;i++){ const s=document.createElement('div'); s.className='card'; gridSkeleton.appendChild(s); }
-    gridSkeleton.classList.remove('hidden');
-  }
-  function hideSkeleton(){ gridSkeleton.classList.add('hidden'); }
 
-  async function loadBatch(){
-    if(loading) return; if(total!==null && offset>=total) return;
-    loading=true; showSkeleton();
-    try{
-      const url = `${API}/api/v1/public/offers?limit=${LIMIT}&offset=${offset}`;
-      const res = await fetch(url);
-      if(!res.ok) throw new Error('feed');
-      const payload = await res.json();
-      const arr = Array.isArray(payload.items)? payload.items : (Array.isArray(payload)?payload:[]);
-      total = typeof payload.total==='number'? payload.total : null;
-      offers = offers.concat(arr); offset += arr.length; render();
-    }catch(e){ console.error(e); toast('Не удалось загрузить витрину'); }
-    finally{ hideSkeleton(); loading=false; }
+const CityPicker = (() => {
+    let target = null;
+    function open(trg){
+      target = trg;
+      $('#cityModal')?.setAttribute('aria-hidden','false');
+      $('#cityOtherWrap').style.display = 'none';
+      $('#cityOtherInput').value = '';
+      $('#citySearch').value = '';
+      renderChips(KNOWN_CITIES.concat([CITY_OTHER]));
+      highlightCurrent();
+      setTimeout(()=> $('#citySearch')?.focus(), 10);
+    }
+    function close(){ $('#cityModal')?.setAttribute('aria-hidden','true'); target = null; }
+    function highlightCurrent(){
+      const val = getTargetInput()?.value || '';
+      $$('.city-chip').forEach(ch => ch.classList.toggle('active', ch.dataset.value === val));
+    }
+    function getTargetInput(){ return target === 'profile' ? $('#profileCityValue') : $('#cityValue'); }
+    function getTargetButton(){ return target === 'profile' ? $('#profileCityOpen') : $('#cityOpen'); }
+    function setValue(city){
+      const inp = getTargetInput();
+      const btn = getTargetButton();
+      if (inp) inp.value = city || '';
+      if (btn) {
+        btn.querySelector('.hint').style.display = city ? 'none' : '';
+        btn.querySelector('.value').textContent = city || '';
+      }
+    }
+    function applyOther(){
+      const v = ($('#cityOtherInput')?.value || '').trim();
+      if (!v) return;
+      setValue(v); close();
+    }
+    function renderChips(items){
+      const grid = $('#cityGrid'); if (!grid) return;
+      grid.innerHTML = items.map(c => `<div class="city-chip" data-value="${c}">${c}</div>`).join('');
+      grid.querySelectorAll('.city-chip').forEach(el => {
+        el.addEventListener('click', () => {
+          const val = el.dataset.value;
+          if (val === CITY_OTHER) { $('#cityOtherWrap').style.display = ''; $('#cityOtherInput').focus(); }
+          else { setValue(val); close(); }
+        });
+      });
+    }
+    function filter(q){
+      const list = KNOWN_CITIES.filter(c => c.toLowerCase().includes(q.toLowerCase()));
+      const items = q.trim() ? list.concat(list.includes(CITY_OTHER)?[]:[CITY_OTHER]) : KNOWN_CITIES.concat([CITY_OTHER]);
+      renderChips(items);
+      highlightCurrent();
+    }
+    function setInitial(btnId, inputId){
+      const btn = $(btnId); const inp = $(inputId);
+      if (!btn || !inp) return;
+      const val = inp.value || '';
+      btn.querySelector('.hint').style.display = val ? 'none' : '';
+      btn.querySelector('.value').textContent = val || '';
+    }
+    on('#cityOpen','click', () => open('register'));
+    on('#profileCityOpen','click', () => open('profile'));
+    on('#cityBackdrop','click', close);
+    on('#cityClose','click', close);
+    on('#cityOtherApply','click', applyOther);
+    on('#citySearch','input', e => filter(e.target.value || ''));
+    return { open, close, setValue, setInitial };
+  })();
+
+  function bindWorkPresets(containerSel, fromSel, toSel){
+    const box = document.querySelector(containerSel); if (!box) return;
+    const form = box.closest('form');
+    const from = form?.querySelector(fromSel);
+    const to = form?.querySelector(toSel);
+    if (!from || !to) return;
+    box.addEventListener('click', (e) => {
+      const chip = e.target.closest('.chip');
+      if (!chip) return;
+      const f = chip.dataset.from || '';
+      const t = chip.dataset.to || '';
+      if (f) from.value = f;
+      if (t) to.value = t;
+      from.dispatchEvent(new Event('input', { bubbles: true }));
+      to.dispatchEvent(new Event('input', { bubbles: true }));
+    });
   }
-  function resetAndLoad(){ offers=[]; total=null; offset=0; render(); loadBatch(); }
-  function onScroll(){ const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 320; if(nearBottom) loadBatch(); }
-  window.addEventListener('scroll', onScroll);
-  document.addEventListener('DOMContentLoaded', resetAndLoad);
+
+  function bindDiscountPresets(){
+    const box = $('#discountPresets'); if (!box) return;
+    const priceEl = $('#offerPrice'), oldEl = $('#offerOldPrice');
+    const round = (v) => Math.round(Number(v)||0);
+    box.addEventListener('click', (e) => {
+      const chip = e.target.closest('.chip'); if (!chip) return;
+      const d = Number(chip.dataset.discount || '0'); if (!d) return;
+      const base = Number(oldEl?.value) || Number(priceEl?.value) || 0;
+      if (!base) return;
+      const discounted = base * (1 - d/100);
+      if (oldEl && !Number(oldEl.value||0)) oldEl.value = String(round(base));
+      if (priceEl) priceEl.value = String(round(discounted));
+      priceEl?.dispatchEvent(new Event('input', { bubbles: true }));
+      oldEl?.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+
+  
+  function autoRoundOfferPrice(){
+    try {
+      const priceEl = $('#offerPrice');
+      if (!priceEl || priceEl._roundBound) return;
+      const doRound = () => {
+        const v = parseFloat(String(priceEl.value||'').replace(',','.'));
+        if (isFinite(v)) priceEl.value = String(Math.round(v));
+      };
+      ['change','blur'].forEach(ev => priceEl.addEventListener(ev, doRound));
+      priceEl._roundBound = true;
+    } catch(_) {}
+  }
+function bindExpirePresets(){
+    const box = $('#expirePresets'); if (!box) return;
+    const ex = $('#expires_at');
+    const fp = ex? ex._flatpickr : null;
+    const closeChip = $('#expireToClose');
+    const closeStr = localStorage.getItem('foody_work_to') || '';
+    if (closeChip && closeStr) { closeChip.style.display = ''; } else if (closeChip) { closeChip.style.display = 'none'; }
+
+    function setDate(dt){
+      if (fp && typeof fp.setDate === 'function') fp.setDate(dt, true);
+      else ex.value = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+    }
+    function todayAt(h, m){
+      const now = new Date(); const dt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0);
+      if (dt <= now) dt.setDate(dt.getDate()+1);
+      setDate(dt);
+    }
+    function toClose(){
+      if (!closeStr) return;
+      const [h,m] = closeStr.split(':').map(x=>parseInt(x,10));
+      todayAt(h||21, m||0);
+    }
+
+    box.addEventListener('click', (e) => {
+      const chip = e.target.closest('.chip'); if (!chip) return;
+      if (chip.dataset.action === 'close') toClose();
+    });
+  }
+
+  function bindAuthToggle(){
+    const loginForm = $('#loginForm');
+    const regForm = $('#registerForm');
+    const modeLogin = $('#mode-login');
+    const modeReg = $('#mode-register');
+    const forms = $('.auth-forms');
+    function apply(){
+      const showLogin = modeLogin ? modeLogin.checked : true;
+      if (loginForm) loginForm.style.display = showLogin ? 'grid' : 'none';
+      if (regForm) regForm.style.display = showLogin ? 'none' : 'grid';
+      if (forms) forms.setAttribute('data-mode', showLogin ? 'login' : 'register');
+      const le = $('#loginError'); if (le) le.classList.add('hidden');
+      const re = $('#registerError'); if (re) re.classList.add('hidden');
+    }
+    if (modeLogin) modeLogin.addEventListener('change', apply);
+    if (modeReg) modeReg.addEventListener('change', apply);
+    try { apply(); } catch(e) { console.warn('auth toggle init failed', e); }
+  }
+
+  attachPhoneMask($('#loginPhone'));
+  attachPhoneMask($('#registerPhone'));
+  attachPhoneMask($('#profilePhone'));
+  setupPwToggle('toggleLoginPw','loginPassword');
+  setupPwToggle('toggleRegisterPw','registerPassword');
+  setupPwToggle('pwOldToggle','pwOld');
+  setupPwToggle('pwNewToggle','pwNew');
+  bindAuthToggle();
+
+  function showInlineError(id, text){
+    const el = $(id); if (!el) { showToast(text); return; }
+    el.textContent = text; el.classList.remove('hidden');
+    setTimeout(()=> el.classList.add('hidden'), 6000);
+  }
+
+  // --- Auth submit handlers ---
+  on('#registerForm','submit', async (e) => {
+    e.preventDefault();
+    const btn = e.currentTarget.querySelector('button[type="submit"]'); if (btn) { btn.disabled = true; btn.textContent = 'Сохранение…'; }
+    const fd = new FormData(e.currentTarget);
+    let city = (fd.get('city')||'').toString().trim();
+    if (!city) { showInlineError('#registerError','Пожалуйста, выберите город'); if (btn){btn.disabled=false;btn.textContent='Зарегистрироваться';} return; }
+    const phoneDigits = getDigits(fd.get('login'));
+    if (phoneDigits.length < 11) { showInlineError('#registerError','Введите телефон в формате +7 900 000 00 00'); if (btn){btn.disabled=false;btn.textContent='Зарегистрироваться';} return; }
+
+    const payload = {
+      name: (fd.get('name')||'').toString().trim(),
+      login: phoneDigits,
+      password: (fd.get('password')||'').toString().trim(),
+      city,
+    };
+    const address = (fd.get('address')||'').toString().trim();
+    const work_from = (fd.get('work_from')||'').toString().slice(0,5) || null;
+    const work_to = (fd.get('work_to')||'').toString().slice(0,5) || null;
+    try {
+      const r = await api('/api/v1/merchant/register_public', { method: 'POST', body: JSON.stringify(payload) });
+      if (!r.restaurant_id || !r.api_key) throw new Error('Неожиданный ответ API');
+      state.rid = r.restaurant_id; state.key = r.api_key;
+      try {
+        setCreds(state.rid, state.key);
+        localStorage.setItem('foody_city', city);
+        localStorage.setItem('foody_reg_city', city);
+        if (work_from) localStorage.setItem('foody_work_from', work_from);
+        if (work_to) localStorage.setItem('foody_work_to', work_to);
+      } catch(_) {}
+      showToast('Ресторан создан ✅');
+      try {
+        const body = { restaurant_id: state.rid, address: address || city, city };
+        if (work_from) { body.work_from = work_from; body.open_time = work_from; }
+        if (work_to)   { body.work_to   = work_to;   body.close_time = work_to; }
+        await api('/api/v1/merchant/profile', { method: 'PUT', body: JSON.stringify(body) });
+      } catch(e) { console.warn('profile save (hours) failed', e); }
+      gate(); activateTab('profile');
+    } catch (err) {
+      const msg = String(err.message||'Ошибка регистрации');
+      if (msg.includes('409') || /already exists/i.test(msg)) showInlineError('#registerError','Такой телефон уже зарегистрирован.');
+      else if (msg.includes('password')) showInlineError('#registerError','Пароль слишком короткий (мин. 6 символов).');
+      else showInlineError('#registerError', msg);
+      console.error(err);
+    } finally {
+      if (btn){btn.disabled=false;btn.textContent='Зарегистрироваться';}
+    }
+  });
+
+  on('#loginForm','submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const phoneDigits = getDigits(fd.get('login'));
+    if (phoneDigits.length < 11) { showInlineError('#loginError','Введите телефон в формате +7 900 000 00 00'); return; }
+    const payload = { login: phoneDigits, password: (fd.get('password')||'').toString().trim() };
+    try {
+      const r = await api('/api/v1/merchant/login', { method: 'POST', body: JSON.stringify(payload) });
+      state.rid = r.restaurant_id; state.key = r.api_key;
+      try { setCreds(state.rid, state.key); } catch(_) {}
+      showToast('Вход выполнен ✅');
+      gate();
+    } catch (err) {
+      const msg = String(err.message||'');
+      if (msg.includes('401') || /invalid login or password/i.test(msg)) showInlineError('#loginError', 'Неверный телефон или пароль.');
+      else showInlineError('#loginError', msg || 'Ошибка входа');
+      console.error(err);
+    }
+  });
+  // --- end auth handlers ---
+
+  function loadCityToProfileUI(city){
+    const btn = $('#profileCityOpen'); const inp = $('#profileCityValue');
+    if (btn && inp) {
+      btn.querySelector('.hint').style.display = city ? 'none' : '';
+      btn.querySelector('.value').textContent = city || '';
+      inp.value = city || '';
+    }
+  }
+
+  async function loadProfile() {
+    if (!state.rid || !state.key) return;
+    try {
+      const p = await api(`/api/v1/merchant/profile?restaurant_id=${encodeURIComponent(state.rid)}`);
+      const f = $('#profileForm'); if (!f) return;
+      f.name.value = p.name || '';
+      const phEl = $('#profilePhone'); if (phEl) { phEl.value = formatRuPhone(getDigits(p.phone)); }
+
+      loadCityToProfileUI(p.city || localStorage.getItem('foody_city') || localStorage.getItem('foody_reg_city') || '');
+      f.address.value = p.address || '';
+
+      const lsFrom = localStorage.getItem('foody_work_from') || '';
+      const lsTo   = localStorage.getItem('foody_work_to')   || '';
+      const apiFrom = (p.work_from || p.open_time || '').slice(0,5);
+      const apiTo   = (p.work_to   || p.close_time || '').slice(0,5);
+      if (apiFrom) { f.work_from.value = apiFrom; try{ localStorage.setItem('foody_work_from', apiFrom);}catch(_){} }
+      else if (lsFrom) { f.work_from.value = lsFrom; }
+
+      if (apiTo) { f.work_to.value = apiTo; try{ localStorage.setItem('foody_work_to', apiTo);}catch(_){} }
+      else if (lsTo) { f.work_to.value = lsTo; }
+
+    } catch (err) { console.warn(err); showToast('Не удалось загрузить профиль: ' + err.message); }
+  }
+
+  on('#profileForm','submit', async (e) => {
+    e.preventDefault();
+    if (!state.rid || !state.key) return showToast('Сначала войдите');
+    const btn = e.currentTarget.querySelector('button[type="submit"]'); if (btn) { btn.disabled = true; btn.textContent = 'Сохранение…'; }
+    const saved = $('#profileSaved'); if (saved) saved.style.display = 'none';
+    const fd = new FormData(e.currentTarget);
+    const city = (fd.get('city')||'').toString().trim();
+    if (!city) { showInlineError('#profileError', 'Укажите город'); if (btn){btn.disabled=false;btn.textContent='Сохранить';} return; }
+
+    let work_from = (fd.get('work_from')||'').toString().slice(0,5) || null;
+    let work_to   = (fd.get('work_to')||'').toString().slice(0,5) || null;
+    if ((work_from && !work_to) || (!work_from && work_to)) {
+      showInlineError('#profileError', 'Заполните оба поля времени (с и до), или очистите оба.');
+      if (btn){btn.disabled=false;btn.textContent='Сохранить';}
+      return;
+    }
+
+    const payload = {
+      restaurant_id: state.rid,
+      name: (fd.get('name')||'').toString().trim() || null,
+      phone: getDigits(fd.get('phone')) || null,
+      address: (fd.get('address')||'').toString().trim() || null,
+      city: city || null,
+      open_time: work_from, close_time: work_to,
+      work_from, work_to,
+    };
+    try {
+      try {
+        localStorage.setItem('foody_city', city || '');
+        if (work_from) localStorage.setItem('foody_work_from', work_from);
+        if (work_to) localStorage.setItem('foody_work_to', work_to);
+      } catch(_) {}
+      await api('/api/v1/merchant/profile', { method: 'PUT', body: JSON.stringify(payload) });
+      showToast('Профиль обновлен ✅');
+      const pe = $('#profileError'); if (pe) pe.classList.add('hidden');
+      if (saved) { saved.style.display = ''; setTimeout(()=> saved.style.display='none', 2500); }
+      loadProfile();
+    } catch (err) {
+      const msg = String(err.message||'Ошибка сохранения');
+      const pe = $('#profileError'); if (pe) { pe.classList.remove('hidden'); pe.textContent = msg; }
+      showToast(msg);
+      console.error(err);
+    } finally {
+      if (btn){btn.disabled=false;btn.textContent='Сохранить';}
+    }
+  });
+
+  on('#pwForm','submit', async (e) => {
+    e.preventDefault();
+    if (!state.rid || !state.key) return showToast('Сначала войдите');
+    const btn = e.currentTarget.querySelector('button[type="submit"]'); if (btn) { btn.disabled = true; btn.textContent = 'Сохранение…'; }
+    const err = $('#pwError'); const ok = $('#pwSaved'); if (err) err.classList.add('hidden'); if (ok) ok.style.display = 'none';
+    const oldp = $('#pwOld')?.value || ''; const newp = $('#pwNew')?.value || ''; const new2 = $('#pwNew2')?.value || '';
+    if (newp.length < 6) { if (err){err.textContent='Новый пароль слишком короткий (мин. 6 символов).'; err.classList.remove('hidden');} if (btn){btn.disabled=false;btn.textContent='Сменить пароль';} return; }
+    if (newp !== new2) { if (err){err.textContent='Пароли не совпадают.'; err.classList.remove('hidden');} if (btn){btn.disabled=false;btn.textContent='Сменить пароль';} return; }
+    try {
+      await api('/api/v1/merchant/password', { method: 'PUT', body: JSON.stringify({ restaurant_id: state.rid, old_password: oldp, new_password: newp }) });
+      showToast('Пароль изменён ✅'); if (ok){ ok.style.display=''; setTimeout(()=> ok.style.display='none', 2500); }
+      $('#pwOld').value=''; $('#pwNew').value=''; $('#pwNew2').value='';
+    } catch (e2) {
+      const msg = String(e2.message||'Ошибка'); if (err){ err.textContent = /401|invalid/i.test(msg) ? 'Неверный текущий пароль.' : msg; err.classList.remove('hidden'); }
+    } finally {
+      if (btn){btn.disabled=false;btn.textContent='Сменить пароль';}
+    }
+  });
+
+  function initCreateTab(){
+    try {
+      const ex = $('#expires_at');
+      if (window.flatpickr && ex && !ex._flatpickr) {
+        if (window.flatpickr.l10ns && window.flatpickr.l10ns.ru) { flatpickr.localize(flatpickr.l10ns.ru); }
+        flatpickr('#expires_at', {
+          enableTime: true, time_24hr: true, minuteIncrement: 5,
+          dateFormat: 'Y-m-d H:i', altInput: true, altFormat: 'd.m.Y H:i',
+          defaultDate: new Date(Date.now() + 60*60*1000), minDate: 'today'
+        });
+      }
+      bindDiscountPresets();
+      bindExpirePresets();
+      const bb = $('#best_before');
+      if (window.flatpickr && bb && !bb._flatpickr) {
+        if (window.flatpickr.l10ns && window.flatpickr.l10ns.ru) { flatpickr.localize(flatpickr.l10ns.ru); }
+        flatpickr('#best_before', {
+          enableTime: true, time_24hr: true, minuteIncrement: 5,
+          dateFormat: 'Y-m-d H:i', altInput: true, altFormat: 'd.m.Y H:i',
+          minDate: 'today'
+        });
+      }
+      
+      autoRoundOfferPrice();
+    } catch (e) {}
+  }
+
+  async function loadOffers() {
+    if (state._offersLoading) return; state._offersLoading = true;
+    if (!state.rid || !state.key) return;
+    const root = $('#offerList'); if (root) root.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
+    try {
+      const data = await api(`/api/v1/merchant/offers?restaurant_id=${encodeURIComponent(state.rid)}`);
+      const list = (data && (data.items || data.results)) ? (data.items || data.results) : (Array.isArray(data) ? data : []);
+      renderOffers(list);
+    } catch (err) { console.error(err); if (root) root.innerHTML = '<div class="hint">Не удалось загрузить</div>'; } finally { state._offersLoading = false; }
+  }
+
+  function renderOffers(items){
+    const root = $('#offerList'); if (!root) return;
+    if (!Array.isArray(items) || items.length === 0) { root.innerHTML = '<div class="hint">Пока нет офферов</div>'; return; }
+    const fmt = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
+    const rows = items.map(o => {
+      const price = o.price_cents!=null ? o.price_cents/100 : (o.price!=null ? Number(o.price) : 0);
+      const old   = o.original_price_cents!=null ? o.original_price_cents/100 : (o.original_price!=null ? Number(o.original_price) : 0);
+      const disc = old>0 ? Math.round((1 - price/old)*100) : 0;
+      const exp = o.expires_at ? fmt.format(new Date(o.expires_at)) : '—';
+      return `<div class="row" data-offer-id="${o.id}">
+        <div>${o.title || '—'}</div>
+        <div>${price.toFixed(2)}</div>
+        <div>${disc?`-${disc}%`:'—'}</div>
+        <div>${o.qty_left ?? '—'} / ${o.qty_total ?? '—'}</div>
+        <div>${exp}</div>
+        <div class="actions"><button class="btn btn-ghost" data-action="edit-offer">Редактировать</button><button class="btn btn-danger" data-action="delete">Удалить</button></div>
+      </div>`;
+    }).join('');
+    const head = `<div class="row head"><div>Название</div><div>Цена</div><div>Скидка</div><div>Остаток</div><div>До</div><div></div></div>`;
+    root.innerHTML = head + rows;
+    // bind delete (delegated)
+    if (!root.dataset.deleteBound){
+      root.dataset.deleteBound = '1';
+      
+      // delegated edit
+      root.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action="edit-offer"]'); if (!btn) return;
+        const row = btn.closest('.row'); const id = row && row.getAttribute('data-offer-id'); if (!id) return;
+        // find item by id if available in state
+        try {
+          const items = (window.__FOODY_STATE__ && window.__FOODY_STATE__.offers) || null;
+          let item = null; if (items && Array.isArray(items)) item = items.find(x=> String(x.id)===String(id));
+          // If no cache, attempt to read from DOM (minimal set)
+          openOfferEditModal(item || { id });
+        } catch(_){ openOfferEditModal({ id }); }
+      }, false);
+
+      function openOfferEditModal(o){
+        const m = $('#offerEditModal'); if (!m) return;
+        $('#editId').value = o.id || '';
+        $('#editTitle').value = o.title || '';
+        $('#editOld').value = (o.original_price_cents!=null ? (o.original_price_cents/100) : (o.original_price || '')) || '';
+        $('#editPrice').value = (o.price_cents!=null ? (o.price_cents/100) : (o.price || '')) || '';
+        $('#editQty').value = (o.qty_total!=null ? o.qty_total : (o.total_qty!=null ? o.total_qty : '')) || '';
+        $('#editExpires').value = o.expires_at ? formatLocal(o.expires_at) : (o.expires || '');
+        $('#editCategory').value = o.category || 'other';
+        $('#editDesc').value = o.description || '';
+        m.classList.add('_open');
+      }
+      function formatLocal(iso){
+        try{ const d=new Date(iso); const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; }catch(_){ return ''; }
+      }
+      function toIsoLocal(str){
+        if(!str) return null; const m = String(str).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$/); if(!m) return null;
+        const [_,Y,M,D,h,mn] = m.map(Number); const dt = new Date(Y,M-1,D,h,mn); return new Date(dt.getTime()-dt.getTimezoneOffset()*60000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+      }
+      const editForm = $('#offerEditForm');
+      const editCancel = $('#offerEditCancel');
+      if (editCancel) editCancel.addEventListener('click', (ev)=>{ ev.preventDefault(); const m=$('#offerEditModal'); if(m) m.classList.remove('_open'); });
+      if (editForm) editForm.addEventListener('submit', async (ev)=>{
+        ev.preventDefault();
+        const id = $('#editId').value;
+        const payload = {
+          title: $('#editTitle').value.trim(),
+          original_price: Number($('#editOld').value||0),
+          price: Number($('#editPrice').value||0),
+          qty_total: Number($('#editQty').value||0),
+          expires_at: toIsoLocal($('#editExpires').value||''),
+          category: $('#editCategory').value || 'other',
+          description: $('#editDesc').value.trim()
+        };
+        try{
+          await api(`/api/v1/merchant/offers/${id}`, { method:'PATCH', body: JSON.stringify(payload) });
+          const m=$('#offerEditModal'); if(m) m.classList.remove('_open');
+          showToast('Сохранено');
+          loadOffers();
+        }catch(err){ showToast('Не удалось сохранить: '+(err.message||err)); }
+      });
+    root.addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-action="delete"]'); if (!btn) return;
+        const row = btn.closest('.row'); const id = row && row.getAttribute('data-offer-id'); if (!id) return;
+        if (!confirm('Удалить оффер?')) return;
+        try {
+          await api(`/api/v1/merchant/offers/${id}`, { method: 'DELETE' });
+          row.remove();
+          try { refreshDashboard && refreshDashboard(); } catch(_){}
+          showToast('Оффер удалён');
+        } catch (err) {
+          showToast('Не удалось удалить: '+ (err.message||err));
+        }
+      });
+    }
+  }
+
+  
+let __dashLastData = null;
+// === Dashboard helpers (lightweight) ===
+function safeNum(v){ const n = Number(v); return isFinite(n) ? n : 0; }
+function parseMaybeDate(v){
+  if (!v) return null;
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(v)) return new Date(v.replace(' ', 'T'));
+  try { const d = new Date(v); return isNaN(d) ? null : d; } catch(_){ return null; }
+}
+function moneyFmt(n){ try{ return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g,' '); }catch(_){ return String(n); }}
+
+function renderDashboard(offers){
+  const guest = document.getElementById('dashGuest');
+  const stats = document.getElementById('dashStats');
+  const acts  = document.getElementById('dashActions');
+  if (!stats || !acts){ if (guest) guest.style.display='block'; return; }
+
+  const now = new Date();
+  const soon = new Date(now.getTime()+2*60*60*1000);
+
+  let active=0, qtySum=0, soonCount=0, revenue=0;
+
+  const arr = Array.isArray(offers) ? offers : (offers?.items || offers?.results || []);
+  for (const o of arr){
+    const ex = parseMaybeDate(o.expires_at || o.expiresAt || o.expires || o.until);
+    const qty = o.qty_left ?? o.qtyLeft ?? o.qty ?? o.qty_total ?? o.qtyTotal ?? 0;
+    const pr  = o.price ?? o.new_price ?? o.final_price ?? 0;
+    const isActive = (qty>0) && (!ex || ex>now);
+    if (isActive){
+      active++;
+      qtySum += safeNum(qty);
+      revenue += safeNum(pr) * safeNum(qty);
+      if (ex && ex<=soon) soonCount++;
+    }
+  }
+
+  const kActive = document.getElementById('kpiActive');
+  const kQty    = document.getElementById('kpiQty');
+  const kRev    = document.getElementById('kpiRevenue');
+  const kSoon   = document.getElementById('kpiSoon');
+
+  if (kActive) kActive.textContent = String(active);
+  if (kQty)    kQty.textContent    = String(qtySum);
+  if (kRev)    kRev.textContent    = moneyFmt(revenue)+' ₽';
+  if (kSoon)   kSoon.textContent   = String(soonCount);
+
+  if (guest) guest.style.display = 'none';
+  stats.style.display = '';
+  acts.style.display  = '';
+}
+
+async function refreshDashboard(){
+  const guest = document.getElementById('dashGuest');
+  const stats = document.getElementById('dashStats');
+  const acts  = document.getElementById('dashActions');
+
+  const authed = !!(state && state.rid && state.key);
+  if (!authed){
+    if (guest) guest.style.display='block';
+    if (stats) stats.style.display='none';
+    if (acts)  acts.style.display='none';
+    return;
+  }
+  try{
+    const data = await api(`/api/v1/merchant/offers?restaurant_id=${encodeURIComponent(state.rid)}`);
+    const list = data?.items || data?.results || data || [];
+    renderDashboard(list);
+  }catch(e){
+    if (guest) guest.style.display='block';
+    if (stats) stats.style.display='none';
+    if (acts)  acts.style.display='none';
+  }
+}
+
+
+// --- Helpers for robust API POST (offers) ---
+function foodyBase() {
+  try {
+    return (window.__FOODY__ && window.__FOODY__.FOODY_API) || window.foodyApi || '';
+  } catch(_) { return ''; }
+}
+function joinApi(path) {
+  const base = foodyBase();
+  if (/^https?:\/\//i.test(path)) return path;
+  if (/^https?:\/\//i.test(base)) return base.replace(/\/+$/, '') + path;
+  return path; // fallback to relative
+}
+
+
+// --- Strong auth POST for offers (header X-Foody-Key, no query fallbacks) ---
+function foodyBase() {
+  try { return (window.__FOODY__ && window.__FOODY__.FOODY_API) || window.foodyApi || ''; }
+  catch(_) { return ''; }
+}
+function joinApi(path) {
+  const base = foodyBase();
+  if (/^https?:\/\//i.test(path)) return path;
+  if (/^https?:\/\//i.test(base)) return base.replace(/\/+$/, '') + path;
+  return path;
+}
+
+
+function foodyBase() {
+  try { return (window.__FOODY__ && window.__FOODY__.FOODY_API) || window.foodyApi || ''; }
+  catch(_) { return ''; }
+}
+function joinApi(path) {
+  const base = foodyBase();
+  if (/^https?:\/\//i.test(path)) return path;
+  if (/^https?:\/\//i.test(base)) return base.replace(/\/+$/, '') + path;
+  return path;
+}
+async function postOfferStrict(payload) {
+  const url = joinApi('/api/v1/merchant/offers');
+  const headers = { 'Content-Type': 'application/json' };
+  if (state && state.key) headers['X-Foody-Key'] = state.key;
+  const doReq = async (u, body) => {
+    const res = await fetch(u, { method: 'POST', headers, body: JSON.stringify(body), mode: 'cors' });
+    const ct = res.headers.get('content-type') || '';
+    const data = ct.includes('application/json') ? await res.json().catch(()=>({})) : await res.text();
+    if (!res.ok) {
+      const msg = typeof data==='object' && data && data.detail ? data.detail : ('Ошибка ' + res.status);
+      const err = new Error(msg); err.status = res.status; err.data = data; throw err;
+    }
+    return data;
+  };
+  try {
+    return await doReq(url, payload);
+  } catch (e) {
+    const msg = String(e?.data?.detail || e?.message || '');
+    if (e.status === 500 && msg.includes('merchant_id')) {
+      const u2 = url + (url.includes('?')?'&':'?') + 'merchant_id=' + encodeURIComponent(payload.merchant_id || payload.restaurant_id || '');
+      return await doReq(u2, payload);
+    }
+    throw e;
+  }
+}
+
+
+  // === QR / Reservations ===
+  const RESV_PAGE = 50;
+  async function loadReservations(reset=false){
+    if (!state.rid || !state.key) return;
+    if (!state._resv) state._resv = { items:[], total:0, offset:0, q:'', status:'' };
+    const st = state._resv;
+    if (reset){ st.offset=0; st.items=[]; }
+    const params = new URLSearchParams();
+    params.set('restaurant_id', state.rid);
+    if (st.q) params.set('q', st.q);
+    if (st.status) params.set('status', st.status);
+    params.set('limit', RESV_PAGE.toString());
+    params.set('offset', st.offset.toString());
+    const box = document.getElementById('res_rows'); if (box) box.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
+    try {
+      const data = await api('/api/v1/merchant/reservations?' + params.toString());
+      const items = (data && data.items) || [];
+      st.total = data && (data.total||0);
+      st.items = st.items.concat(items);
+      st.offset += items.length;
+      renderReservations(st.items);
+      const empty = document.getElementById('res_empty'); if (empty) empty.style.display = (st.items.length ? 'none':''); 
+    } catch(e){ if (box) box.innerHTML = '<div class="hint">Не удалось загрузить</div>'; }
+  }
+  function fmtDt(s){ try{ return (s? new Date(s).toLocaleString('ru-RU') : '—'); }catch(_){ return s||'—'; } }
+  function renderReservations(items){
+    const box = document.getElementById('res_rows'); if (!box) return;
+    const rows = (items||[]).map(r => {
+      const act = r.status==='active' ? `<button class="btn btn-primary" data-resv="redeem" data-id="${r.id}" data-code="${r.code||''}">Погасить</button>
+      <button class="btn btn-ghost" data-resv="cancel" data-id="${r.id}" data-code="${r.code||''}">Отменить</button>` : '';
+      return `<div class="row">
+        <div>${fmtDt(r.created_at)}</div>
+        <div class="nowrap">${r.code||r.id}</div>
+        <div class="nowrap">${r.offer_id||'—'}</div>
+        <div><span class="badge">${r.status}</span></div>
+        <div>${fmtDt(r.expires_at)}</div>
+        <div class="actions">${act}</div>
+      </div>`;
+    }).join('');
+    box.innerHTML = rows || '<div class="hint">Брони не найдены</div>';
+  }
+  async function resvAction(action, idOrCode){
+    try {
+      const data = await api(`/api/v1/merchant/reservations/${encodeURIComponent(idOrCode)}/${action}`, { method:'POST' });
+      const st = state._resv; if (st && Array.isArray(st.items)) {
+        const i = st.items.findIndex(x => String(x.id) === String(data.id));
+        if (i>=0) st.items[i] = data;
+        renderReservations(st.items);
+      }
+      showToast(action==='redeem'?'Погашено ✅':'Отменено');
+      try{ refreshDashboard && refreshDashboard(); }catch(_){}
+    } catch(e){ showToast(e.message||'Ошибка'); }
+  }
+
+  window.__qrStream = null; window.__qrTimer = null;
+  async function redeem(code){
+    const msg = document.getElementById('qr_msg');
+    if (!code) { if(msg){msg.textContent='Введите код'; msg.className='tag badge-warn';} return; }
+    try {
+      const res = await api(`/api/v1/merchant/reservations/${encodeURIComponent(code)}/redeem`, { method:'POST' });
+      if (msg){ msg.textContent = 'Погашено ✓'; msg.className='tag badge-ok'; }
+      try { refreshDashboard && refreshDashboard(); } catch(_){}
+    } catch (e) {
+      if (msg){ msg.textContent = 'Ошибка: ' + (e.message||e); msg.className='tag badge-warn'; }
+    }
+  }
+  function stopScan(){ try{ if (window.__qrTimer){ clearInterval(window.__qrTimer); window.__qrTimer=null; } const v=document.getElementById('qr_video'); const s=(v&&v.srcObject)||window.__qrStream; if(s){ s.getTracks().forEach(t=>t.stop()); if(v) v.srcObject=null; window.__qrStream=null; } }catch(_){}}
+  async function startScan(){
+    const msg = document.getElementById('qr_msg');
+    const video = document.getElementById('qr_video');
+    if (!('BarcodeDetector' in window)) {
+      if (msg){ msg.textContent='Сканер не поддерживается: введите код вручную'; msg.className='tag badge-warn'; }
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } });
+      video.srcObject = stream; window.__qrStream = stream; await video.play();
+      const det = new BarcodeDetector({ formats:['qr_code'] });
+      window.__qrTimer = setInterval(async () => {
+        try {
+          const codes = await det.detect(video);
+          if (codes && codes[0]){
+            if(window.__qrTimer){ clearInterval(window.__qrTimer); window.__qrTimer=null; }
+            stream.getTracks().forEach(t=>t.stop());
+            const val = codes[0].rawValue || '';
+            const input = document.getElementById('qr_code'); if (input) input.value = val;
+            redeem(val);
+          }
+        } catch(_) {}
+      }, 350);
+    } catch (e) {
+      if (msg){ msg.textContent='Не удалось открыть камеру'; msg.className='tag badge-warn'; }
+    }
+  }
+  function initQrTab(){
+    const r = document.getElementById('qr_redeem_btn');
+    const s = document.getElementById('qr_scan_btn');
+    const inp = document.getElementById('qr_code');
+    if (r && !r.dataset.bound){ r.dataset.bound='1'; r.addEventListener('click', ()=> redeem((document.getElementById('qr_code')||{}).value||'')); }
+    if (s && !s.dataset.bound){ s.dataset.bound='1'; s.addEventListener('click', startScan); }
+    if (inp && !inp.dataset.bound){ inp.dataset.bound='1'; inp.addEventListener('keydown', (ev)=>{ if(ev.key==='Enter'){ ev.preventDefault(); redeem(inp.value||''); } }); setTimeout(()=>{ try{ inp.focus(); }catch(_){}} , 50); }
+    // reservations bindings
+    const q = document.getElementById('res_q'); const st = document.getElementById('res_status'); const more = document.getElementById('res_more');
+    if (q && !q.dataset.bound){ q.dataset.bound='1'; q.addEventListener('input', ()=>{ if (!state._resv) state._resv={}; state._resv.q = q.value.trim(); loadReservations(true); }); }
+    if (st && !st.dataset.bound){ st.dataset.bound='1'; st.addEventListener('change', ()=>{ if (!state._resv) state._resv={}; state._resv.status = st.value; loadReservations(true); }); }
+    if (more && !more.dataset.bound){ more.dataset.bound='1'; more.addEventListener('click', ()=> loadReservations(false)); }
+    // delegated actions
+    const list = document.getElementById('res_list');
+    if (list && !list.dataset.bound){ list.dataset.bound='1'; list.addEventListener('click', (e)=>{
+      const btn = e.target.closest('[data-resv]'); if (!btn) return;
+      const a = btn.getAttribute('data-resv'); const id = btn.getAttribute('data-id'); const code = btn.getAttribute('data-code');
+      resvAction(a, code || id);
+    }); }
+    loadReservations(true);
+  }
+
+
+document.addEventListener('DOMContentLoaded', () => {
+    try{ initQrTab(); }catch(_){}
+    try {
+      // Universal [data-tab] router (incl. dashboard buttons)
+      document.addEventListener('click', (ev) => {
+        try {
+          const el = ev.target.closest('[data-tab]');
+          if (el) { ev.preventDefault(); const t = el.getAttribute('data-tab') || el.dataset.tab; if (t) activateTab(t); }
+        } catch(_) {}
+      }, true);
+
+
+// --- Dedup toasts for login/logout (avoid double "Вы вышли/вошли") ---
+try {
+  if (!window.__toastDedup && typeof window.showToast === 'function') {
+    const __origShowToast = window.showToast;
+    window.showToast = function(msg, ...rest) {
+      try {
+        if (msg && (String(msg).includes('Вы вышли') || String(msg).includes('Вы вошли'))) {
+          const now = Date.now();
+          if (window.__toastLast === msg && (now - (window.__toastLastTs || 0)) < 1000) {
+            return; // drop duplicate within 1s
+          }
+          window.__toastLast = msg;
+          window.__toastLastTs = now;
+        }
+      } catch(_) {}
+      return __origShowToast(msg, ...rest);
+    };
+    window.__toastDedup = true;
+  }
+} catch(_) {}
+
+      attachPhoneMask($('#loginPhone'));
+      attachPhoneMask($('#registerPhone'));
+      attachPhoneMask($('#profilePhone'));
+      setupPwToggle('toggleLoginPw','loginPassword');
+      setupPwToggle('toggleRegisterPw','registerPassword');
+      setupPwToggle('pwOldToggle','pwOld');
+      setupPwToggle('pwNewToggle','pwNew');
+      CityPicker.setInitial('#cityOpen', '#cityValue');
+      CityPicker.setInitial('#profileCityOpen', '#profileCityValue');
+      bindWorkPresets('.work-presets[data-for="register"]', 'input[name="work_from"]', 'input[name="work_to"]');
+      bindWorkPresets('.work-presets[data-for="profile"]', '#profile_work_from', '#profile_work_to');
+      
+// --- Dashboard actions: route buttons to tabs ---
+try {
+  on('#dashActions [data-tab]', 'click', (e) => {
+    e.preventDefault();
+    const t = e.currentTarget?.getAttribute('data-tab') || e.currentTarget?.dataset?.tab;
+    if (t) activateTab(t);
+  });
+} catch(_) {}
+
+// --- Offer create submit (strict auth + merchant_id) ---
+
+// Offer create submit (strict + aliases + fallback)
+on('#offerForm','submit', async (e) => {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const err = form.querySelector('#offerError');
+  if (err) err.classList.add('hidden');
+
+  const fd = new FormData(form);
+  const toNum = (v) => { const n = parseFloat(String(v||'').replace(',', '.')); return isFinite(n) ? n : 0; };
+  const toInt = (v) => { const n = parseInt(String(v||'').trim(), 10); return isFinite(n) ? n : 0; };
+  const trim = (v) => String(v||'').trim();
+
+  const rid = (state && (state.rid || state.restaurant_id)) || (parseInt(localStorage.getItem('foody_restaurant_id')||'0',10)) || null;
+
+  const payload = {
+    restaurant_id: rid || undefined,
+    restaurantId: rid || undefined,
+    merchant_id: rid || undefined,
+    merchantId: rid || undefined,
+    title: trim(fd.get('title')),
+    original_price: toNum(fd.get('original_price')||fd.get('price_base')) || undefined,
+    price: toNum(fd.get('price')),
+    qty_total: toInt(fd.get('qty_total')||fd.get('quantity')),
+    category: trim(fd.get('category')) || 'other',
+    description: trim(fd.get('description')) || '',
+    image_url: trim(fd.get('image_url')) || undefined,
+  };
+  const ex = trim(fd.get('expires_at'));
+  if (ex) payload.expires_at = dtLocalToIso(ex) || ex;
+  const bb = trim(fd.get('best_before'));
+  if (bb) payload.best_before = dtLocalToIso(bb) || bb;
+  
+  // --- VALIDATE: expires_at must not exceed best_before ---
+  {
+    const parseLocal = (s)=>{
+      if (!s) return null;
+      try {
+        const parts = s.includes('T') ? s.split('T') : s.split(' ');
+        const [Y,M,D] = parts[0].split('-').map(x=>parseInt(x,10));
+        const [h,m] = (parts[1]||'00:00').split(':').map(x=>parseInt(x,10));
+        return new Date(Y, (M-1), D, h||0, m||0, 0, 0);
+      } catch(_) { return null; }
+    };
+    const dEx = parseLocal(ex);
+    const dBb = parseLocal(bb);
+    if (dEx && dBb && dEx.getTime() > dBb.getTime()){
+      showInlineError('#offerError','Срок действия оффера не может превышать срок годности продукта');
+      return; // abort submit
+    }
+  }
+;
+
+
+  if (!payload.title) { showInlineError('#offerError','Укажите название'); return; }
+  if (!(payload.qty_total > 0)) { showInlineError('#offerError','Количество должно быть больше 0'); return; }
+  if (!(payload.price > 0)) { showInlineError('#offerError','Новая цена должна быть больше 0'); return; }
+  if (payload.original_price && payload.price >= payload.original_price) { showInlineError('#offerError','Новая цена должна быть меньше обычной'); return; }
+  if (!payload.expires_at) { showInlineError('#offerError','Укажите срок действия оффера'); return; }
+  if (!rid) { showInlineError('#offerError','Вы не авторизованы. Войдите и попробуйте снова.'); activateTab('auth'); return; }
+
+  const btn = form.querySelector('button[type="submit"]');
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = 'Сохранение…'; }
+    await postOfferStrict(payload);
+    showToast('Оффер сохранён ✓');
+    try { form.reset(); } catch(_){}
+    activateTab('offers');
+    try { await loadOffers(); } catch(_){}
+    try { refreshDashboard && refreshDashboard(); } catch(_){}
+  } catch (e2) {
+    showInlineError('#offerError', e2?.message || 'Ошибка при сохранении');
+    if (String(e2.message||'').startsWith('401')) activateTab('auth');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Создать оффер'; }
+  }
+});
+const ok = gate(); 
+    try { if (ok) { refreshDashboard(); } } catch(_) {}
+if (!ok) activateTab('auth');
+    } catch(e){ console.error(e); const a = document.getElementById('auth'); if (a) { a.classList.add('active'); } }
+  });
 })();
+
+
+// Foody patch: make "Создать оффер" button full width (failsafe)
+(function(){
+  const onReady = (fn)=>{ if (document.readyState==='complete' || document.readyState==='interactive') setTimeout(fn,0);
+                          else document.addEventListener('DOMContentLoaded', fn); };
+  onReady(()=>{
+    try {
+      const form = document.getElementById('offerForm');
+      if (!form) return;
+      const btn = form.querySelector('button[type="submit"]');
+      if (btn){ btn.classList.add('full'); btn.style.width='100%'; btn.style.display='block'; }
+    } catch(_){}
+  });
+})();
+
+
+  // Password eye toggle (global for auth & profile)
+  document.addEventListener('click', function(e){
+    const btn = e.target.closest('.pwd-toggle'); if (!btn) return;
+    const input = btn.parentElement?.querySelector('input'); if (!input) return;
+    const isText = input.type === 'text';
+    input.type = isText ? 'password' : 'text';
+    btn.setAttribute('aria-pressed', (!isText).toString());
+    if (!isText) { input.setAttribute('data-pwd-is-text','1'); } else { input.removeAttribute('data-pwd-is-text'); }
+  });
+
+  document.addEventListener('visibilitychange', ()=>{ if(document.hidden) try{ stopScan(); }catch(_){}});
+
+
+document.addEventListener('DOMContentLoaded', gate);
