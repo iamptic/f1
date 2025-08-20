@@ -11,6 +11,7 @@
 <link href="https://unpkg.com/filepond-plugin-image-preview@4.6.12/dist/filepond-plugin-image-preview.min.css" rel="stylesheet">
 <link href="./offer_photo_filepond.css" rel="stylesheet">
 <link rel="stylesheet" href="./css/uploader.css">
+<link rel="stylesheet" href="./merchant_cards.css" />
 
   <script defer src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ru.js"></script>
@@ -124,9 +125,13 @@
 
     <main class="content">
       
-<section class="pane active" id="dashboard">
+<section id="section-dashboard" class="pane active">
   <div class="card">
     <div class="card-title">Дашборд</div>
+    <div id="dashStats" class="dashboard"></div>
+  </div>
+  <!-- Можно добавить графики позже -->
+</section>>
     <p id="dashGuest" class="muted">Войдите или зарегистрируйтесь, чтобы создавать офферы и управлять профилем.</p>
     <div id="dashStats" class="grid two" style="display:none;gap:12px;">
       <div class="card kpi"><div class="card-title small">Активные офферы</div><div id="kpiActive" class="big">—</div></div>
@@ -304,15 +309,14 @@
 </section>
 
 
-      <section class="pane" id="offers">
-        <div class="card">
-          <div class="card-title">Мои офферы</div>
-          <div id="offerList" class="table">
-            <div class="skeleton"></div>
-            <div class="skeleton"></div>
-          </div>
-        </div>
-      </section>
+    <section id="section-offers" class="pane">
+  <div class="card">
+    <div class="card-title">Мои офферы</div>
+    <div id="offersSkeleton" class="skeleton" style="height:52px;"></div>
+    <div id="offerCards"></div> <!-- сюда рендерятся карточки -->
+    <button id="offersRefresh" class="btn" style="margin-top:10px;">Обновить</button>
+  </div>
+</section>
 
       
 
@@ -510,6 +514,7 @@
 <script src="./js/offers_logic_hotfix_v10.js"></script>
 <script src="./js/uploader.js"></script>
 <script src="./js/edit_prefill.js"></script>
+<script defer src="./merchant_app.js"></script>
 
 
 </body>
