@@ -417,7 +417,38 @@
             </div>
           </div>
         </div>
-      </section>
+      
+        <div class="card">
+          <div class="card-title">Брони</div>
+          <div class="grid two" style="align-items:end;gap:8px;">
+            <label>Поиск
+              <input id="res_q" placeholder="Код или телефон">
+            </label>
+            <label>Статус
+              <select id="res_status">
+                <option value="">Все</option>
+                <option value="active">Активные</option>
+                <option value="redeemed">Погашенные</option>
+                <option value="expired">Истёкшие</option>
+                <option value="canceled">Отменённые</option>
+              </select>
+            </label>
+          </div>
+          <div id="res_list" class="table" style="margin-top:8px;">
+            <div class="row head">
+              <div>Дата</div><div>Код</div><div>Оффер</div><div>Статус</div><div>До</div><div></div>
+            </div>
+            <div id="res_rows">
+              <div class="skeleton"></div>
+              <div class="skeleton"></div>
+            </div>
+            <div id="res_empty" class="hint" style="display:none">Брони не найдены</div>
+          </div>
+          <div style="display:flex;justify-content:center;margin-top:8px;">
+            <button id="res_more" class="btn btn-ghost">Загрузить ещё</button>
+          </div>
+        </div>
+</section>
 
     </main>
 

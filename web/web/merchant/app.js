@@ -92,6 +92,7 @@
       if (tab === 'profile') loadProfile();
       if (tab === 'export') updateCreds();
       if (tab === 'create') initCreateTab();
+      if (tab === 'qr') initQrTab(); else try{ stopScan(); }catch(_){}
     } catch (e) { console.warn('activateTab failed', e); }
   }
   on('#tabs','click', (e) => { const btn = e.target.closest('.seg-btn'); if (btn?.dataset.tab) activateTab(btn.dataset.tab); });
@@ -790,6 +791,60 @@ async function postOfferStrict(payload) {
 
 
   // === QR / Reservations ===
+  const RESV_PAGE = 50;
+  async function loadReservations(reset=false){
+    if (!state.rid || !state.key) return;
+    if (!state._resv) state._resv = { items:[], total:0, offset:0, q:'', status:'' };
+    const st = state._resv;
+    if (reset){ st.offset=0; st.items=[]; }
+    const params = new URLSearchParams();
+    params.set('restaurant_id', state.rid);
+    if (st.q) params.set('q', st.q);
+    if (st.status) params.set('status', st.status);
+    params.set('limit', RESV_PAGE.toString());
+    params.set('offset', st.offset.toString());
+    const box = document.getElementById('res_rows'); if (box) box.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
+    try {
+      const data = await api('/api/v1/merchant/reservations?' + params.toString());
+      const items = (data && data.items) || [];
+      st.total = data && (data.total||0);
+      st.items = st.items.concat(items);
+      st.offset += items.length;
+      renderReservations(st.items);
+      const empty = document.getElementById('res_empty'); if (empty) empty.style.display = (st.items.length ? 'none':''); 
+    } catch(e){ if (box) box.innerHTML = '<div class="hint">Не удалось загрузить</div>'; }
+  }
+  function fmtDt(s){ try{ return (s? new Date(s).toLocaleString('ru-RU') : '—'); }catch(_){ return s||'—'; } }
+  function renderReservations(items){
+    const box = document.getElementById('res_rows'); if (!box) return;
+    const rows = (items||[]).map(r => {
+      const act = r.status==='active' ? `<button class="btn btn-primary" data-resv="redeem" data-id="${r.id}" data-code="${r.code||''}">Погасить</button>
+      <button class="btn btn-ghost" data-resv="cancel" data-id="${r.id}" data-code="${r.code||''}">Отменить</button>` : '';
+      return `<div class="row">
+        <div>${fmtDt(r.created_at)}</div>
+        <div class="nowrap">${r.code||r.id}</div>
+        <div class="nowrap">${r.offer_id||'—'}</div>
+        <div><span class="badge">${r.status}</span></div>
+        <div>${fmtDt(r.expires_at)}</div>
+        <div class="actions">${act}</div>
+      </div>`;
+    }).join('');
+    box.innerHTML = rows || '<div class="hint">Брони не найдены</div>';
+  }
+  async function resvAction(action, idOrCode){
+    try {
+      const data = await api(`/api/v1/merchant/reservations/${encodeURIComponent(idOrCode)}/${action}`, { method:'POST' });
+      const st = state._resv; if (st && Array.isArray(st.items)) {
+        const i = st.items.findIndex(x => String(x.id) === String(data.id));
+        if (i>=0) st.items[i] = data;
+        renderReservations(st.items);
+      }
+      showToast(action==='redeem'?'Погашено ✅':'Отменено');
+      try{ refreshDashboard && refreshDashboard(); }catch(_){}
+    } catch(e){ showToast(e.message||'Ошибка'); }
+  }
+
+  window.__qrStream = null; window.__qrTimer = null;
   async function redeem(code){
     const msg = document.getElementById('qr_msg');
     if (!code) { if(msg){msg.textContent='Введите код'; msg.className='tag badge-warn';} return; }
@@ -801,6 +856,7 @@ async function postOfferStrict(payload) {
       if (msg){ msg.textContent = 'Ошибка: ' + (e.message||e); msg.className='tag badge-warn'; }
     }
   }
+  function stopScan(){ try{ if (window.__qrTimer){ clearInterval(window.__qrTimer); window.__qrTimer=null; } const v=document.getElementById('qr_video'); const s=(v&&v.srcObject)||window.__qrStream; if(s){ s.getTracks().forEach(t=>t.stop()); if(v) v.srcObject=null; window.__qrStream=null; } }catch(_){}}
   async function startScan(){
     const msg = document.getElementById('qr_msg');
     const video = document.getElementById('qr_video');
@@ -810,13 +866,13 @@ async function postOfferStrict(payload) {
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } });
-      video.srcObject = stream; await video.play();
+      video.srcObject = stream; window.__qrStream = stream; await video.play();
       const det = new BarcodeDetector({ formats:['qr_code'] });
-      const timer = setInterval(async () => {
+      window.__qrTimer = setInterval(async () => {
         try {
           const codes = await det.detect(video);
           if (codes && codes[0]){
-            clearInterval(timer);
+            if(window.__qrTimer){ clearInterval(window.__qrTimer); window.__qrTimer=null; }
             stream.getTracks().forEach(t=>t.stop());
             const val = codes[0].rawValue || '';
             const input = document.getElementById('qr_code'); if (input) input.value = val;
@@ -831,12 +887,28 @@ async function postOfferStrict(payload) {
   function initQrTab(){
     const r = document.getElementById('qr_redeem_btn');
     const s = document.getElementById('qr_scan_btn');
+    const inp = document.getElementById('qr_code');
     if (r && !r.dataset.bound){ r.dataset.bound='1'; r.addEventListener('click', ()=> redeem((document.getElementById('qr_code')||{}).value||'')); }
     if (s && !s.dataset.bound){ s.dataset.bound='1'; s.addEventListener('click', startScan); }
+    if (inp && !inp.dataset.bound){ inp.dataset.bound='1'; inp.addEventListener('keydown', (ev)=>{ if(ev.key==='Enter'){ ev.preventDefault(); redeem(inp.value||''); } }); setTimeout(()=>{ try{ inp.focus(); }catch(_){}} , 50); }
+    // reservations bindings
+    const q = document.getElementById('res_q'); const st = document.getElementById('res_status'); const more = document.getElementById('res_more');
+    if (q && !q.dataset.bound){ q.dataset.bound='1'; q.addEventListener('input', ()=>{ if (!state._resv) state._resv={}; state._resv.q = q.value.trim(); loadReservations(true); }); }
+    if (st && !st.dataset.bound){ st.dataset.bound='1'; st.addEventListener('change', ()=>{ if (!state._resv) state._resv={}; state._resv.status = st.value; loadReservations(true); }); }
+    if (more && !more.dataset.bound){ more.dataset.bound='1'; more.addEventListener('click', ()=> loadReservations(false)); }
+    // delegated actions
+    const list = document.getElementById('res_list');
+    if (list && !list.dataset.bound){ list.dataset.bound='1'; list.addEventListener('click', (e)=>{
+      const btn = e.target.closest('[data-resv]'); if (!btn) return;
+      const a = btn.getAttribute('data-resv'); const id = btn.getAttribute('data-id'); const code = btn.getAttribute('data-code');
+      resvAction(a, code || id);
+    }); }
+    loadReservations(true);
   }
 
 
 document.addEventListener('DOMContentLoaded', () => {
+    try{ initQrTab(); }catch(_){}
     try {
       // Universal [data-tab] router (incl. dashboard buttons)
       document.addEventListener('click', (ev) => {
@@ -999,3 +1071,5 @@ if (!ok) activateTab('auth');
     btn.setAttribute('aria-pressed', (!isText).toString());
     if (!isText) { input.setAttribute('data-pwd-is-text','1'); } else { input.removeAttribute('data-pwd-is-text'); }
   });
+
+  document.addEventListener('visibilitychange', ()=>{ if(document.hidden) try{ stopScan(); }catch(_){}});
