@@ -166,64 +166,70 @@
     finally{ reserveBusy=false; if(btn) btn.disabled=false; }
   };
 
-  // --- QR modal ---
-  function ensureQrModal(){
-    // если по какой-то причине модалки нет — создадим
-    if($('#qrModal')) return;
-    const html = `
-    <div id="qrModal" class="modal" aria-hidden="true">
-      <div class="modal-backdrop"></div>
-      <div class="modal-dialog">
-        <div class="modal-h">
-          <div class="modal-title">Бронь оформлена</div>
-          <button id="qrClose" class="x" aria-label="Закрыть">×</button>
-        </div>
-        <div class="modal-b">
-          <div class="qr-wrap"><canvas id="qrCanvas" width="220" height="220"></canvas></div>
-          <div class="qr-info">
-            <div class="qr-code-line">Код для погашения: <strong id="qrCodeText">—</strong></div>
-            <div id="qrHint" class="muted">Покажите этот код или QR сотруднику ресторана.</div>
-          </div>
-          <div class="actions"><button id="qrOk" class="btn primary">Готово</button></div>
-        </div>
-      </div>
-    </div>`;
-    const tmp=document.createElement('div'); tmp.innerHTML=html.trim(); document.body.appendChild(tmp.firstChild);
-    $('#qrClose').onclick=()=>setModal('#qrModal', false);
-    $('#qrOk').onclick=()=>setModal('#qrModal', false);
-  }
-
-  function showQR(text){
-  // убедимся, что модалка есть и видна
-  setModal('#qrModal', true);
-
-  const t = (text||'').toString().trim();
-  $('#qrCodeText').textContent = t || '—';
-
-  // отрисовать после показа модалки, чтобы canvas гарантированно был в DOM
-  setTimeout(() => {
-    try {
-      const canvas = document.querySelector('#qrCanvas');
-      const QR = window.QRCode || (typeof QRCode !== 'undefined' ? QRCode : null);
-      if (QR && canvas) {
-        QR.toCanvas(canvas, t || 'NO_CODE', {
-          width: 220,
-          margin: 1,
-          color: {
-            // светлые "пиксели" QR для тёмной темы
-            dark: '#e8edf2',
-            // прозрачный фон холста (чтобы сливался с модалкой)
-            light: '#0000'
-          }
-        }, () => {});
-      }
-    } catch (e) {
-      console.warn('QR draw error', e);
+ // ——— Lazy-load qrcode либы и отрисовка с безопасным fallback ———
+function loadQrLib() {
+  return new Promise((resolve, reject) => {
+    if (window.QRCode || (typeof QRCode !== 'undefined')) return resolve();
+    // уже вставляли?
+    if (document.getElementById('qr-lib')) {
+      const check = () => (window.QRCode || (typeof QRCode !== 'undefined')) ? resolve() : setTimeout(check, 50);
+      return check();
     }
-  }, 0);
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js';
+    s.id = 'qr-lib';
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('QR lib load error'));
+    document.head.appendChild(s);
+  });
 }
 
-  const setModal = (sel, open)=>{ const m=$(sel); if(!m) return; m.setAttribute('aria-hidden', open?'false':'true'); };
+function drawQrToCanvas(canvas, text) {
+  const QR = window.QRCode || (typeof QRCode !== 'undefined' ? QRCode : null);
+  if (QR && canvas) {
+    QR.toCanvas(canvas, text || 'NO_CODE', {
+      width: 220,
+      margin: 1,
+      color: { dark: '#e8edf2', light: '#0000' } // светлые модули на тёмной модалке
+    }, () => {});
+    return true;
+  }
+  return false;
+}
+
+function drawTextFallback(canvas, text) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // фон и рамка для контраста
+  ctx.fillStyle = '#0f141c';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#242b35';
+  ctx.strokeRect(0.5, 0.5, canvas.width-1, canvas.height-1);
+  // крупный код по центру
+  ctx.fillStyle = '#e8edf2';
+  ctx.font = 'bold 28px Inter, system-ui, Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(text || '').trim() || '—', canvas.width/2, canvas.height/2);
+}
+
+// ОБНОВЛЁННАЯ showQR
+async function showQR(text){
+  const code = (text||'').toString().trim();
+  // открываем модалку сперва — чтобы canvas точно был в DOM
+  setModal('#qrModal', true);
+  document.getElementById('qrCodeText').textContent = code || '—';
+
+  const canvas = document.getElementById('qrCanvas');
+  // ждём либу; если что-то не так — рисуем текстом
+  try {
+    await loadQrLib();
+    if (!drawQrToCanvas(canvas, code)) drawTextFallback(canvas, code);
+  } catch {
+    drawTextFallback(canvas, code);
+  }
+}
 
   // --- geo / events / start (как было) ---
   geoBtn.onclick=async()=>{ try{ const pos=await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(res,rej,{enableHighAccuracy:true,timeout:10000})); const {latitude:lat,longitude:lng}=pos.coords; geo.set({lat,lng}); toast('Геопозиция сохранена'); smartRadius(); render(); }catch{ toast('Не удалось получить геопозицию'); } };
