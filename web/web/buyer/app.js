@@ -218,6 +218,36 @@
     });
   }
 
+
+  // Robust reservation code/QR extraction
+  function _pickCode(obj){
+    if (!obj) return '';
+    if (typeof obj === 'string') return obj;
+    if (obj.code) return obj.code;
+    if (obj.qr_code) return obj.qr_code;
+    if (obj.reservation_code) return obj.reservation_code;
+    if (obj.token) return obj.token;
+    return '';
+  }
+  function getReservationCode(data){
+    try{
+      if (!data) return '';
+      // direct fields
+      let code = data.code || data.qr_code || data.reservation_code || '';
+      // nested common shapes
+      if (!code && data.reservation) code = _pickCode(data.reservation);
+      if (!code && data.data) code = _pickCode(data.data);
+      if (!code && Array.isArray(data.items) && data.items.length) code = _pickCode(data.items[0]);
+      if (!code && data.id) code = data.id;
+      return String(code||'').trim();
+    }catch(_){ return ''; }
+  }
+  function getQrPayload(data){
+    try{
+      return (data.qr_url || data.url || '').trim();
+    }catch(_){ return ''; }
+  }
+
   // ====== Offer sheet + reserve + QR
   function openOffer(o){
     currentOffer = o;
@@ -254,17 +284,30 @@
       render();
       setModal('#sheet', false);
 
-      const code = data.code || data.reservation_code || data.qr_code || (data.reservation && (data.reservation.code || data.reservation.qr_code));
-      const payload = data.qr_url || data.url || code || '';
-      showQR(payload || code || '');
+      const code = getReservationCode(data);
+      const payload = getQrPayload(data) || code;
+      if (!code && !payload) { toast('Бронь оформлена, но код не получен'); return; }
+      showQR(payload || code);
     }catch(e){ console.error(e); toast('Сеть недоступна'); }
   };
 
   function showQR(text){
     const canvas = $('#qrCanvas');
-    $('#qrCodeText').textContent = (text||'').trim() || '—';
-    try{ window.QRCode.toCanvas(canvas, String(text||'NO_CODE'), { width:220, margin:1 }, ()=>{}); }catch(e){}
+    const code = (text||'').toString().trim() || 'NO_CODE';
+    $('#qrCodeText').textContent = code;
     setModal('#qrModal', true);
+    // draw a tick later to ensure modal/canvas is visible for crisp QR
+    setTimeout(()=>{
+      try{
+        if (window.QRCode && typeof window.QRCode.toCanvas==='function'){
+          window.QRCode.toCanvas(canvas, code, { width:220, margin:1 }, ()=>{});
+        } else if (canvas && canvas.getContext){
+          const ctx = canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height);
+          ctx.fillStyle = '#111'; ctx.fillRect(0,0,canvas.width,canvas.height);
+          ctx.fillStyle = '#fff'; ctx.fillText(code, 10, 20);
+        }
+      }catch(e){}
+    }, 30);
   }
   $('#qrClose').onclick = () => setModal('#qrModal', false);
   $('#qrOk').onclick = () => setModal('#qrModal', false);
