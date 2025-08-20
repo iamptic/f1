@@ -72,3 +72,9 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--text);
 
 #toast{position:fixed;right:12px;bottom:16px;display:grid;gap:8px;z-index:80}
 .toast{background:#0f141c;border:1px solid var(--brd);border-left:6px solid var(--accent2);padding:10px 12px;border-radius:12px}
+/* Контраст для QR на тёмной модалке */
+.qr-wrap canvas{
+  background:#0f141c;           /* лёгкий контрастный фон */
+  border:1px solid var(--brd);  /* тонкая рамка */
+  border-radius:12px;
+}
