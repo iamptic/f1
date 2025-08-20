@@ -194,24 +194,34 @@
   }
 
   function showQR(text){
-    ensureQrModal();
-    const t = (text||'').toString().trim();
-    $('#qrCodeText').textContent = t || '—';
+  // убедимся, что модалка есть и видна
+  setModal('#qrModal', true);
 
-    // 1) сначала показать модалку
-    setModal('#qrModal', true);
+  const t = (text||'').toString().trim();
+  $('#qrCodeText').textContent = t || '—';
 
-    // 2) затем, когда DOM обновился — отрисовать QR
-    setTimeout(() => {
-      try{
-        const canvas = $('#qrCanvas');
-        const QR = window.QRCode || (typeof QRCode!=='undefined' ? QRCode : null);
-        if (QR && canvas) {
-          QR.toCanvas(canvas, t || 'NO_CODE', { width: 220, margin: 1 }, () => {});
-        }
-      }catch(e){ console.warn('QR draw error', e); }
-    }, 0);
-  }
+  // отрисовать после показа модалки, чтобы canvas гарантированно был в DOM
+  setTimeout(() => {
+    try {
+      const canvas = document.querySelector('#qrCanvas');
+      const QR = window.QRCode || (typeof QRCode !== 'undefined' ? QRCode : null);
+      if (QR && canvas) {
+        QR.toCanvas(canvas, t || 'NO_CODE', {
+          width: 220,
+          margin: 1,
+          color: {
+            // светлые "пиксели" QR для тёмной темы
+            dark: '#e8edf2',
+            // прозрачный фон холста (чтобы сливался с модалкой)
+            light: '#0000'
+          }
+        }, () => {});
+      }
+    } catch (e) {
+      console.warn('QR draw error', e);
+    }
+  }, 0);
+}
 
   const setModal = (sel, open)=>{ const m=$(sel); if(!m) return; m.setAttribute('aria-hidden', open?'false':'true'); };
 
