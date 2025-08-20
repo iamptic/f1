@@ -3,19 +3,10 @@
   const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
   const on = (sel, evt, fn) => { const el = $(sel); if (el) el.addEventListener(evt, fn, { passive: false }); };
 
-  function setCreds(rid, key){
-  try{
-    localStorage.setItem('foody_restaurant_id', String(rid||''));
-    localStorage.setItem('foody_key', String(key||''));
-    localStorage.setItem('restaurant_id', String(rid||''));
-    localStorage.setItem('api_key', String(key||''));
-  }catch(_){}
-}
-
-const state = {
+  const state = {
     api: (window.__FOODY__ && window.__FOODY__.FOODY_API) || window.foodyApi || 'https://foodyback-production.up.railway.app',
-    rid: localStorage.getItem('foody_restaurant_id') || localStorage.getItem('restaurant_id') || '',
-    key: localStorage.getItem('foody_key') || localStorage.getItem('api_key') || '',
+    rid: localStorage.getItem('foody_restaurant_id') || '',
+    key: localStorage.getItem('foody_key') || '',
   };
 
   const KNOWN_CITIES = ["Москва","Санкт-Петербург","Казань","Екатеринбург","Сочи","Новосибирск","Нижний Новгород","Омск","Томск"];
@@ -382,7 +373,8 @@ function bindExpirePresets(){
       if (!r.restaurant_id || !r.api_key) throw new Error('Неожиданный ответ API');
       state.rid = r.restaurant_id; state.key = r.api_key;
       try {
-        setCreds(state.rid, state.key);
+        localStorage.setItem('foody_restaurant_id', state.rid);
+        localStorage.setItem('foody_key', state.key);
         localStorage.setItem('foody_city', city);
         localStorage.setItem('foody_reg_city', city);
         if (work_from) localStorage.setItem('foody_work_from', work_from);
@@ -416,7 +408,7 @@ function bindExpirePresets(){
     try {
       const r = await api('/api/v1/merchant/login', { method: 'POST', body: JSON.stringify(payload) });
       state.rid = r.restaurant_id; state.key = r.api_key;
-      try { setCreds(state.rid, state.key); } catch(_) {}
+      try { localStorage.setItem('foody_restaurant_id', state.rid); localStorage.setItem('foody_key', state.key); } catch(_) {}
       showToast('Вход выполнен ✅');
       gate();
     } catch (err) {
@@ -1081,6 +1073,3 @@ if (!ok) activateTab('auth');
   });
 
   document.addEventListener('visibilitychange', ()=>{ if(document.hidden) try{ stopScan(); }catch(_){}});
-
-
-document.addEventListener('DOMContentLoaded', gate);
