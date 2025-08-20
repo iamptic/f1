@@ -41,3 +41,5 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px/
 .qr-info{margin-top:6px}
 .qr-code-line{font-size:16px}
 .actions{margin-top:12px;display:flex;justify-content:flex-end}
+/* Foody v17: clamp description lines in cards */
+.desc{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
