@@ -4,91 +4,47 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Foody · Витрина</title>
-  <link rel="stylesheet" href="./style.css" />
-  <script defer src="/config.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-  <script defer src="./app.js"></script>
+  <link rel="stylesheet" href="./style.css?v=buyer-qrfix-1" />
+  <script>window.FOODY_API = 'https://foodyback-production.up.railway.app';</script>
+  <script defer src="./app.js?v=buyer-qrfix-1"></script>
 </head>
 <body>
-  <header class="appbar">
-    <div class="left">
-      <div class="logo">F</div>
-      <div class="tit">
-        <div class="t">Foody</div>
-        <div class="s">Скидки перед закрытием</div>
-      </div>
-    </div>
-    <div class="right">
-      <button id="geoBtn" class="btn small" title="Определить геопозицию">Моя гео</button>
-    </div>
+  <header class="site-header">
+    <div class="brand">Foody</div>
+    <div class="sub">Вкусные офферы к закрытию</div>
   </header>
 
-  <div class="filters sticky">
-    <div class="row">
-      <input id="search" class="search" placeholder="Поиск по названию…" />
-    </div>
-    <div class="row">
-      <div class="chips scroll" id="catsChips"></div>
-    </div>
-    <div class="row two-lanes">
-      <div class="chips scroll" id="radiusChips"></div>
-      <div class="chips scroll" id="sortChips"></div>
-    </div>
-  </div>
-
-  <main class="content">
-    <div id="grid" class="grid"></div>
-    <div id="gridSkeleton" class="grid skeleton hidden"></div>
+  <main id="app">
+    <!-- тут ваша лента офферов -->
+    <div id="offers" class="offers"></div>
   </main>
 
-  <!-- Шторка детали оффера -->
-  <div id="sheet" class="modal" aria-hidden="true">
-    <div class="modal-backdrop"></div>
-    <div class="modal-dialog">
-      <div class="modal-h">
-        <div id="sTitle" class="modal-title">—</div>
-        <button id="sheetClose" class="x" aria-label="Закрыть">×</button>
+  <!-- Модалка «Бронь оформлена» -->
+  <div id="reserveModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal__backdrop" data-modal-close></div>
+
+    <div class="modal__dialog" role="document">
+      <button class="modal__close" type="button" title="Закрыть" aria-label="Закрыть" data-modal-close>×</button>
+
+      <h3 class="modal__title">Бронь оформлена</h3>
+
+      <div class="qr-wrap">
+        <!-- QR рисуем в этот canvas -->
+        <canvas id="qrCanvas" width="220" height="220" aria-hidden="true"></canvas>
       </div>
-      <div class="modal-b">
-        <img id="sImg" alt="">
-        <div class="meta">
-          <div id="sPrice" class="price">—</div>
-          <div id="sOld" class="old">—</div>
-          <div id="sQty" class="qty">—</div>
-          <div id="sExp" class="exp">—</div>
-          <div id="sLeft" class="muted">—</div>
-        </div>
-        <div id="sDesc" class="desc">—</div>
-        <div class="actions">
-          <button id="reserveBtn" class="btn primary">Забронировать</button>
-        </div>
+
+      <p class="reserve-note">
+        Код для погашения: <b id="reserveCode">— — —</b><br />
+        Покажите этот код или QR сотруднику ресторана.
+      </p>
+
+      <div class="modal__actions">
+        <button class="btn btn-primary" type="button" data-modal-close>Готово</button>
       </div>
     </div>
   </div>
 
-  <!-- Модалка QR -->
-  <div id="qrModal" class="modal" aria-hidden="true">
-    <div class="modal-backdrop"></div>
-    <div class="modal-dialog">
-      <div class="modal-h">
-        <div class="modal-title">Бронь оформлена</div>
-        <button id="qrClose" class="x" aria-label="Закрыть">×</button>
-      </div>
-      <div class="modal-b">
-        <div class="qr-wrap">
-          <canvas id="qrCanvas" width="220" height="220"></canvas>
-        </div>
-        <div class="qr-info">
-          <div class="qr-code-line">Код для погашения: <strong id="qrCodeText">—</strong></div>
-          <div id="qrHint" class="muted">Покажите этот код или QR сотруднику ресторана.</div>
-        </div>
-        <div class="actions">
-          <button id="qrOk" class="btn primary">Готово</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
+  <!-- Тосты -->
   <div id="toast"></div>
 </body>
 </html>
