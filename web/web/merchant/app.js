@@ -87,8 +87,9 @@
       $$('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
       const panes = $$('.pane');
       if (panes.length) panes.forEach(p => p.classList.toggle('active', p.id === tab));
-      else { const t = document.getElementById(tab); if (t) t.classList.add('active'); }
+      else { const t = document.getElementById(tab); if (t) t.classList.add('active'); 
       if (tab === 'qr') { try{ initQrTab(); loadReservations(true); }catch(_){} }
+}
       if (tab === 'offers') loadOffers();
       if (tab === 'profile') loadProfile();
       if (tab === 'export') updateCreds();
@@ -133,28 +134,37 @@
     } catch(e){ return null; }
   }
 
-  async function api(path, { method='GET', headers={}, body=null, raw=false } = {}) {
+  
+async function api(path, { method='GET', headers={}, body=null, raw=false } = {}) {
     const url = `${state.api}${path}`;
     const h = { 'Content-Type': 'application/json', ...headers };
     if (state.key) h['X-Foody-Key'] = state.key;
     try {
       const res = await fetch(url, { method, headers: h, body });
-      if (res.status === 204) { if (raw) return res; return null; }
+      // --- Accept 204 No Content without trying to parse JSON
+      if (res.status === 204) { 
+        if (raw) return res; 
+        return null; 
+      }
       if (!res.ok) {
         const ct = res.headers.get('content-type')||'';
         let msg = `${res.status} ${res.statusText}`;
         if (ct.includes('application/json')) {
-          let j = null; try { j = await res.json(); } catch(_) {}
+          let j = null;
+          try { j = await res.json(); } catch(_) {}
           if (j && (j.detail || j.message)) msg = j.detail || j.message || msg;
         } else {
-          let t = ''; try { t = await res.text(); } catch(_) {}
+          let t = '';
+          try { t = await res.text(); } catch(_) {}
           if (t) msg += ` — ${t.slice(0,180)}`;
         }
         throw new Error(msg);
       }
       if (raw) return res;
       const ct2 = res.headers.get('content-type') || '';
-      if (ct2.includes('application/json')) { try { return await res.json(); } catch(_) { return null; } }
+      if (ct2.includes('application/json')) {
+        try { return await res.json(); } catch(_) { return null; }
+      }
       try { return await res.text(); } catch(_) { return ''; }
     } catch (err) {
       if (String(err.message).includes('Failed to fetch')) throw new Error('Не удалось связаться с сервером. Проверьте соединение или CORS.');
@@ -162,8 +172,8 @@
     }
   }
 
-  // ===== City Picker =====
-  const CityPicker = (() => {
+
+const CityPicker = (() => {
     let target = null;
     function open(trg){
       target = trg;
@@ -183,9 +193,13 @@
     function getTargetInput(){ return target === 'profile' ? $('#profileCityValue') : $('#cityValue'); }
     function getTargetButton(){ return target === 'profile' ? $('#profileCityOpen') : $('#cityOpen'); }
     function setValue(city){
-      const inp = getTargetInput(); const btn = getTargetButton();
+      const inp = getTargetInput();
+      const btn = getTargetButton();
       if (inp) inp.value = city || '';
-      if (btn) { btn.querySelector('.hint').style.display = city ? 'none' : ''; btn.querySelector('.value').textContent = city || ''; }
+      if (btn) {
+        btn.querySelector('.hint').style.display = city ? 'none' : '';
+        btn.querySelector('.value').textContent = city || '';
+      }
     }
     function applyOther(){
       const v = ($('#cityOtherInput')?.value || '').trim();
@@ -206,7 +220,8 @@
     function filter(q){
       const list = KNOWN_CITIES.filter(c => c.toLowerCase().includes(q.toLowerCase()));
       const items = q.trim() ? list.concat(list.includes(CITY_OTHER)?[]:[CITY_OTHER]) : KNOWN_CITIES.concat([CITY_OTHER]);
-      renderChips(items); highlightCurrent();
+      renderChips(items);
+      highlightCurrent();
     }
     function setInitial(btnId, inputId){
       const btn = $(btnId); const inp = $(inputId);
@@ -259,6 +274,7 @@
     });
   }
 
+  
   function autoRoundOfferPrice(){
     try {
       const priceEl = $('#offerPrice');
@@ -271,8 +287,7 @@
       priceEl._roundBound = true;
     } catch(_) {}
   }
-
-  function bindExpirePresets(){
+function bindExpirePresets(){
     const box = $('#expirePresets'); if (!box) return;
     const ex = $('#expires_at');
     const fp = ex? ex._flatpickr : null;
@@ -335,7 +350,7 @@
     setTimeout(()=> el.classList.add('hidden'), 6000);
   }
 
-  // ===== Auth =====
+  // --- Auth submit handlers ---
   on('#registerForm','submit', async (e) => {
     e.preventDefault();
     const btn = e.currentTarget.querySelector('button[type="submit"]'); if (btn) { btn.disabled = true; btn.textContent = 'Сохранение…'; }
@@ -404,11 +419,15 @@
       console.error(err);
     }
   });
+  // --- end auth handlers ---
 
-  // ===== Профиль =====
   function loadCityToProfileUI(city){
     const btn = $('#profileCityOpen'); const inp = $('#profileCityValue');
-    if (btn && inp) { btn.querySelector('.hint').style.display = city ? 'none' : ''; btn.querySelector('.value').textContent = city || ''; inp.value = city || ''; }
+    if (btn && inp) {
+      btn.querySelector('.hint').style.display = city ? 'none' : '';
+      btn.querySelector('.value').textContent = city || '';
+      inp.value = city || '';
+    }
   }
 
   async function loadProfile() {
@@ -418,16 +437,20 @@
       const f = $('#profileForm'); if (!f) return;
       f.name.value = p.name || '';
       const phEl = $('#profilePhone'); if (phEl) { phEl.value = formatRuPhone(getDigits(p.phone)); }
+
       loadCityToProfileUI(p.city || localStorage.getItem('foody_city') || localStorage.getItem('foody_reg_city') || '');
       f.address.value = p.address || '';
+
       const lsFrom = localStorage.getItem('foody_work_from') || '';
       const lsTo   = localStorage.getItem('foody_work_to')   || '';
       const apiFrom = (p.work_from || p.open_time || '').slice(0,5);
       const apiTo   = (p.work_to   || p.close_time || '').slice(0,5);
       if (apiFrom) { f.work_from.value = apiFrom; try{ localStorage.setItem('foody_work_from', apiFrom);}catch(_){} }
       else if (lsFrom) { f.work_from.value = lsFrom; }
+
       if (apiTo) { f.work_to.value = apiTo; try{ localStorage.setItem('foody_work_to', apiTo);}catch(_){} }
       else if (lsTo) { f.work_to.value = lsTo; }
+
     } catch (err) { console.warn(err); showToast('Не удалось загрузить профиль: ' + err.message); }
   }
 
@@ -472,7 +495,10 @@
       const msg = String(err.message||'Ошибка сохранения');
       const pe = $('#profileError'); if (pe) { pe.classList.remove('hidden'); pe.textContent = msg; }
       showToast(msg);
-    } finally { if (btn){btn.disabled=false;btn.textContent='Сохранить';} }
+      console.error(err);
+    } finally {
+      if (btn){btn.disabled=false;btn.textContent='Сохранить';}
+    }
   });
 
   on('#pwForm','submit', async (e) => {
@@ -489,10 +515,38 @@
       $('#pwOld').value=''; $('#pwNew').value=''; $('#pwNew2').value='';
     } catch (e2) {
       const msg = String(e2.message||'Ошибка'); if (err){ err.textContent = /401|invalid/i.test(msg) ? 'Неверный текущий пароль.' : msg; err.classList.remove('hidden'); }
-    } finally { if (btn){btn.disabled=false;btn.textContent='Сменить пароль';} }
+    } finally {
+      if (btn){btn.disabled=false;btn.textContent='Сменить пароль';}
+    }
   });
 
-  // ===== Офферы =====
+  function initCreateTab(){
+    try {
+      const ex = $('#expires_at');
+      if (window.flatpickr && ex && !ex._flatpickr) {
+        if (window.flatpickr.l10ns && window.flatpickr.l10ns.ru) { flatpickr.localize(flatpickr.l10ns.ru); }
+        flatpickr('#expires_at', {
+          enableTime: true, time_24hr: true, minuteIncrement: 5,
+          dateFormat: 'Y-m-d H:i', altInput: true, altFormat: 'd.m.Y H:i',
+          defaultDate: new Date(Date.now() + 60*60*1000), minDate: 'today'
+        });
+      }
+      bindDiscountPresets();
+      bindExpirePresets();
+      const bb = $('#best_before');
+      if (window.flatpickr && bb && !bb._flatpickr) {
+        if (window.flatpickr.l10ns && window.flatpickr.l10ns.ru) { flatpickr.localize(flatpickr.l10ns.ru); }
+        flatpickr('#best_before', {
+          enableTime: true, time_24hr: true, minuteIncrement: 5,
+          dateFormat: 'Y-m-d H:i', altInput: true, altFormat: 'd.m.Y H:i',
+          minDate: 'today'
+        });
+      }
+      
+      autoRoundOfferPrice();
+    } catch (e) {}
+  }
+
   async function loadOffers() {
     if (state._offersLoading) return; state._offersLoading = true;
     if (!state.rid || !state.key) return;
@@ -501,10 +555,7 @@
       const data = await api(`/api/v1/merchant/offers?restaurant_id=${encodeURIComponent(state.rid)}`);
       const list = (data && (data.items || data.results)) ? (data.items || data.results) : (Array.isArray(data) ? data : []);
       renderOffers(list);
-    } catch (err) {
-      console.error(err);
-      if (root) root.innerHTML = '<div class="hint">Не удалось загрузить</div>';
-    } finally { state._offersLoading = false; }
+    } catch (err) { console.error(err); if (root) root.innerHTML = '<div class="hint">Не удалось загрузить</div>'; } finally { state._offersLoading = false; }
   }
 
   function renderOffers(items){
@@ -522,107 +573,609 @@
         <div>${disc?`-${disc}%`:'—'}</div>
         <div>${o.qty_left ?? '—'} / ${o.qty_total ?? '—'}</div>
         <div>${exp}</div>
-        <div><button class="btn-ghost" data-edit="${o.id}">Ред.</button></div>
+        <div class="actions"><button class="btn btn-ghost" data-action="edit-offer">Редактировать</button><button class="btn btn-danger" data-action="delete">Удалить</button></div>
       </div>`;
     }).join('');
-    root.innerHTML = `<div class="row head">
-      <div>Название</div><div>Цена</div><div>Скидка</div><div>Ост.</div><div>Истекает</div><div></div>
-    </div>${rows}`;
-  }
+    const head = `<div class="row head"><div>Название</div><div>Цена</div><div>Скидка</div><div>Остаток</div><div>До</div><div></div></div>`;
+    root.innerHTML = head + rows;
+    // bind delete (delegated)
+    if (!root.dataset.deleteBound){
+      root.dataset.deleteBound = '1';
+      
+      // delegated edit
+      root.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action="edit-offer"]'); if (!btn) return;
+        const row = btn.closest('.row'); const id = row && row.getAttribute('data-offer-id'); if (!id) return;
+        // find item by id if available in state
+        try {
+          const items = (window.__FOODY_STATE__ && window.__FOODY_STATE__.offers) || null;
+          let item = null; if (items && Array.isArray(items)) item = items.find(x=> String(x.id)===String(id));
+          // If no cache, attempt to read from DOM (minimal set)
+          openOfferEditModal(item || { id });
+        } catch(_){ openOfferEditModal({ id }); }
+      }, false);
 
-  // ===== Брони / QR =====
-  function statusRu(s){
-    const map = { active:'Активна', redeemed:'Погашена', canceled:'Отменена', expired:'Истекла' };
-    return map[s] || s || '—';
-  }
-
-  async function loadReservations(force=false){
-    if (!state.rid || !state.key) return;
-    if (state._resvLoading && !force) return;
-    state._resvLoading = true;
-    const root = $('#resvList'); if (root) root.innerHTML = '<div class="skeleton"></div>';
-    try{
-      const data = await api(`/api/v1/merchant/reservations?restaurant_id=${encodeURIComponent(state.rid)}`);
-      const list = Array.isArray(data?.items) ? data.items : (Array.isArray(data)?data:[]);
-      renderReservations(list);
-    }catch(err){ console.warn(err); if (root) root.innerHTML = '<div class="hint">Не удалось загрузить</div>'; }
-    finally{ state._resvLoading = false; }
-  }
-
-  function renderReservations(list){
-    const root = $('#resvList'); if (!root) return;
-    if (!list.length){ root.innerHTML = '<div class="hint">Броней пока нет</div>'; return; }
-    const fmt = new Intl.DateTimeFormat('ru-RU', { dateStyle:'short', timeStyle:'short' });
-    root.innerHTML = list.map(r => {
-      const when = r.created_at ? fmt.format(new Date(r.created_at)) : '—';
-      const code = r.code || r.reserve_code || '—';
-      const st = statusRu(r.status);
-      const canRedeem = r.status === 'active';
-      return `<div class="list-cards item" data-res-id="${r.id}">
-        <div>
-          <div><strong>${r.offer_title || 'Оффер'}</strong></div>
-          <div class="hint">Создана: ${when} • Код: <b>${code}</b></div>
-          <div class="hint">Статус: <b>${st}</b></div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn-ghost" data-scan="${code}">Сканировать</button>
-          <button class="btn btn-primary" data-redeem="${code}" ${canRedeem?'':'disabled'}>Погасить</button>
-        </div>
-      </div>`;
-    }).join('');
-
-    root.onclick = async (e) => {
-      const btn = e.target.closest('button'); if (!btn) return;
-      const code = btn.dataset.redeem || btn.dataset.scan;
-      if (!code) return;
-      if (btn.dataset.scan){
-        // просто подсказка: используйте камеру/сканер в будущем
-        showToast(`Скан: введите код ${code} (скоро подключим камеру)`);
-        return;
+      function openOfferEditModal(o){
+        const m = $('#offerEditModal'); if (!m) return;
+        $('#editId').value = o.id || '';
+        $('#editTitle').value = o.title || '';
+        $('#editOld').value = (o.original_price_cents!=null ? (o.original_price_cents/100) : (o.original_price || '')) || '';
+        $('#editPrice').value = (o.price_cents!=null ? (o.price_cents/100) : (o.price || '')) || '';
+        $('#editQty').value = (o.qty_total!=null ? o.qty_total : (o.total_qty!=null ? o.total_qty : '')) || '';
+        $('#editExpires').value = o.expires_at ? formatLocal(o.expires_at) : (o.expires || '');
+        $('#editCategory').value = o.category || 'other';
+        $('#editDesc').value = o.description || '';
+        m.classList.add('_open');
       }
-      if (btn.dataset.redeem){
+      function formatLocal(iso){
+        try{ const d=new Date(iso); const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; }catch(_){ return ''; }
+      }
+      function toIsoLocal(str){
+        if(!str) return null; const m = String(str).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$/); if(!m) return null;
+        const [_,Y,M,D,h,mn] = m.map(Number); const dt = new Date(Y,M-1,D,h,mn); return new Date(dt.getTime()-dt.getTimezoneOffset()*60000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+      }
+      const editForm = $('#offerEditForm');
+      const editCancel = $('#offerEditCancel');
+      if (editCancel) editCancel.addEventListener('click', (ev)=>{ ev.preventDefault(); const m=$('#offerEditModal'); if(m) m.classList.remove('_open'); });
+      if (editForm) editForm.addEventListener('submit', async (ev)=>{
+        ev.preventDefault();
+        const id = $('#editId').value;
+        const payload = {
+          title: $('#editTitle').value.trim(),
+          original_price: Number($('#editOld').value||0),
+          price: Number($('#editPrice').value||0),
+          qty_total: Number($('#editQty').value||0),
+          expires_at: toIsoLocal($('#editExpires').value||''),
+          category: $('#editCategory').value || 'other',
+          description: $('#editDesc').value.trim()
+        };
         try{
-          await api('/api/v1/merchant/reservations/redeem', { method:'POST', body: JSON.stringify({ restaurant_id: state.rid, code }) });
-          showToast('Бронь погашена ✅');
-          loadReservations(true);
-        }catch(err){ showToast(String(err.message||'Ошибка погашения')); }
-      }
-    };
+          await api(`/api/v1/merchant/offers/${id}`, { method:'PATCH', body: JSON.stringify(payload) });
+          const m=$('#offerEditModal'); if(m) m.classList.remove('_open');
+          showToast('Сохранено');
+          loadOffers();
+        }catch(err){ showToast('Не удалось сохранить: '+(err.message||err)); }
+      });
+    root.addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-action="delete"]'); if (!btn) return;
+        const row = btn.closest('.row'); const id = row && row.getAttribute('data-offer-id'); if (!id) return;
+        if (!confirm('Удалить оффер?')) return;
+        try {
+          await api(`/api/v1/merchant/offers/${id}`, { method: 'DELETE' });
+          row.remove();
+          try { refreshDashboard && refreshDashboard(); } catch(_){}
+          showToast('Оффер удалён');
+        } catch (err) {
+          showToast('Не удалось удалить: '+ (err.message||err));
+        }
+      });
+    }
   }
 
-  function initQrTab(){
-    // можно вставить будущую инициализацию сканера, пока — ничего
+  
+let __dashLastData = null;
+// === Dashboard helpers (lightweight) ===
+function safeNum(v){ const n = Number(v); return isFinite(n) ? n : 0; }
+function parseMaybeDate(v){
+  if (!v) return null;
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(v)) return new Date(v.replace(' ', 'T'));
+  try { const d = new Date(v); return isNaN(d) ? null : d; } catch(_){ return null; }
+}
+function moneyFmt(n){ try{ return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g,' '); }catch(_){ return String(n); }}
+
+function renderDashboard(offers){
+  const guest = document.getElementById('dashGuest');
+  const stats = document.getElementById('dashStats');
+  const acts  = document.getElementById('dashActions');
+  if (!stats || !acts){ if (guest) guest.style.display='block'; return; }
+
+  const now = new Date();
+  const soon = new Date(now.getTime()+2*60*60*1000);
+
+  let active=0, qtySum=0, soonCount=0, revenue=0;
+
+  const arr = Array.isArray(offers) ? offers : (offers?.items || offers?.results || []);
+  for (const o of arr){
+    const ex = parseMaybeDate(o.expires_at || o.expiresAt || o.expires || o.until);
+    const qty = o.qty_left ?? o.qtyLeft ?? o.qty ?? o.qty_total ?? o.qtyTotal ?? 0;
+    const pr  = o.price ?? o.new_price ?? o.final_price ?? 0;
+    const isActive = (qty>0) && (!ex || ex>now);
+    if (isActive){
+      active++;
+      qtySum += safeNum(qty);
+      revenue += safeNum(pr) * safeNum(qty);
+      if (ex && ex<=soon) soonCount++;
+    }
   }
 
-  // ===== Создание оффера =====
-  function initCreateTab(){
+  const kActive = document.getElementById('kpiActive');
+  const kQty    = document.getElementById('kpiQty');
+  const kRev    = document.getElementById('kpiRevenue');
+  const kSoon   = document.getElementById('kpiSoon');
+
+  if (kActive) kActive.textContent = String(active);
+  if (kQty)    kQty.textContent    = String(qtySum);
+  if (kRev)    kRev.textContent    = moneyFmt(revenue)+' ₽';
+  if (kSoon)   kSoon.textContent   = String(soonCount);
+
+  if (guest) guest.style.display = 'none';
+  stats.style.display = '';
+  acts.style.display  = '';
+}
+
+async function refreshDashboard(){
+  const guest = document.getElementById('dashGuest');
+  const stats = document.getElementById('dashStats');
+  const acts  = document.getElementById('dashActions');
+
+  const authed = !!(state && state.rid && state.key);
+  if (!authed){
+    if (guest) guest.style.display='block';
+    if (stats) stats.style.display='none';
+    if (acts)  acts.style.display='none';
+    return;
+  }
+  try{
+    const data = await api(`/api/v1/merchant/offers?restaurant_id=${encodeURIComponent(state.rid)}`);
+    const list = data?.items || data?.results || data || [];
+    renderDashboard(list);
+  }catch(e){
+    if (guest) guest.style.display='block';
+    if (stats) stats.style.display='none';
+    if (acts)  acts.style.display='none';
+  }
+}
+
+
+// --- Helpers for robust API POST (offers) ---
+function foodyBase() {
+  try {
+    return (window.__FOODY__ && window.__FOODY__.FOODY_API) || window.foodyApi || '';
+  } catch(_) { return ''; }
+}
+function joinApi(path) {
+  const base = foodyBase();
+  if (/^https?:\/\//i.test(path)) return path;
+  if (/^https?:\/\//i.test(base)) return base.replace(/\/+$/, '') + path;
+  return path; // fallback to relative
+}
+
+
+// --- Strong auth POST for offers (header X-Foody-Key, no query fallbacks) ---
+function foodyBase() {
+  try { return (window.__FOODY__ && window.__FOODY__.FOODY_API) || window.foodyApi || ''; }
+  catch(_) { return ''; }
+}
+function joinApi(path) {
+  const base = foodyBase();
+  if (/^https?:\/\//i.test(path)) return path;
+  if (/^https?:\/\//i.test(base)) return base.replace(/\/+$/, '') + path;
+  return path;
+}
+
+
+function foodyBase() {
+  try { return (window.__FOODY__ && window.__FOODY__.FOODY_API) || window.foodyApi || ''; }
+  catch(_) { return ''; }
+}
+function joinApi(path) {
+  const base = foodyBase();
+  if (/^https?:\/\//i.test(path)) return path;
+  if (/^https?:\/\//i.test(base)) return base.replace(/\/+$/, '') + path;
+  return path;
+}
+async function postOfferStrict(payload) {
+  const url = joinApi('/api/v1/merchant/offers');
+  const headers = { 'Content-Type': 'application/json' };
+  if (state && state.key) headers['X-Foody-Key'] = state.key;
+  const doReq = async (u, body) => {
+    const res = await fetch(u, { method: 'POST', headers, body: JSON.stringify(body), mode: 'cors' });
+    const ct = res.headers.get('content-type') || '';
+    const data = ct.includes('application/json') ? await res.json().catch(()=>({})) : await res.text();
+    if (!res.ok) {
+      const msg = typeof data==='object' && data && data.detail ? data.detail : ('Ошибка ' + res.status);
+      const err = new Error(msg); err.status = res.status; err.data = data; throw err;
+    }
+    return data;
+  };
+  try {
+    return await doReq(url, payload);
+  } catch (e) {
+    const msg = String(e?.data?.detail || e?.message || '');
+    if (e.status === 500 && msg.includes('merchant_id')) {
+      const u2 = url + (url.includes('?')?'&':'?') + 'merchant_id=' + encodeURIComponent(payload.merchant_id || payload.restaurant_id || '');
+      return await doReq(u2, payload);
+    }
+    throw e;
+  }
+}
+
+
+  // === QR / Reservations ===
+  async function redeem(code){
+    const msg = document.getElementById('qr_msg');
+    if (!code) { if(msg){msg.textContent='Введите код'; msg.className='tag badge-warn';} return; }
     try {
-      const ex = $('#expires_at');
-      if (window.flatpickr && ex && !ex._flatpickr) {
-        if (window.flatpickr.l10ns && window.flatpickr.l10ns.ru) { flatpickr.localize(flatpickr.l10ns.ru); }
-        flatpickr('#expires_at', { enableTime:true, time_24hr:true, minuteIncrement:5, dateFormat:'Y-m-d H:i', altInput:true, altFormat:'d.m.Y H:i', defaultDate:new Date(Date.now()+60*60*1000), minDate:'today' });
-      }
-      const bb = $('#best_before');
-      if (window.flatpickr && bb && !bb._flatpickr) {
-        if (window.flatpickr.l10ns && window.flatpickr.l10ns.ru) { flatpickr.localize(flatpickr.l10ns.ru); }
-        flatpickr('#best_before', { enableTime:true, time_24hr:true, minuteIncrement:5, dateFormat:'Y-m-d H:i', altInput:true, altFormat:'d.m.Y H:i', minDate:'today' });
-      }
-      bindDiscountPresets();
-      autoRoundOfferPrice();
-      bindExpirePresets();
-    } catch (_) {}
+      const res = await api(`/api/v1/merchant/reservations/${encodeURIComponent(code)}/redeem`, { method:'POST' });
+      if (msg){ msg.textContent = 'Погашено ✓'; msg.className='tag badge-ok'; }
+      try { refreshDashboard && refreshDashboard(); } catch(_){}
+    } catch (e) {
+      if (msg){ msg.textContent = 'Ошибка: ' + (e.message||e); msg.className='tag badge-warn'; }
+    }
+  }
+  async function startScan(){
+    const msg = document.getElementById('qr_msg');
+    const video = document.getElementById('qr_video');
+    if (!('BarcodeDetector' in window)) {
+      if (msg){ msg.textContent='Сканер не поддерживается: введите код вручную'; msg.className='tag badge-warn'; }
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } });
+      video.srcObject = stream; await video.play();
+      const det = new BarcodeDetector({ formats:['qr_code'] });
+      const timer = setInterval(async () => {
+        try {
+          const codes = await det.detect(video);
+          if (codes && codes[0]){
+            clearInterval(timer);
+            stream.getTracks().forEach(t=>t.stop());
+            const val = codes[0].rawValue || '';
+            const input = document.getElementById('qr_code'); if (input) input.value = val;
+            redeem(val);
+          }
+        } catch(_) {}
+      }, 350);
+    } catch (e) {
+      if (msg){ msg.textContent='Не удалось открыть камеру'; msg.className='tag badge-warn'; }
+    }
+  }
+  function initQrTab(){
+    const r = document.getElementById('qr_redeem_btn');
+    const s = document.getElementById('qr_scan_btn');
+    if (r && !r.dataset.bound){ r.dataset.bound='1'; r.addEventListener('click', ()=> redeem((document.getElementById('qr_code')||{}).value||'')); }
+    if (s && !s.dataset.bound){ s.dataset.bound='1'; s.addEventListener('click', startScan); }
   }
 
-  // ==== старт
-  bindWorkPresets('#profileWorkPresets','[name="work_from"]','[name="work_to"]');
-  CityPicker.setInitial('#cityOpen', '#cityValue');
-  CityPicker.setInitial('#profileCityOpen', '#profileCityValue');
 
-  // клики на сегментах/нижнем меню переводят на вкладку
-  on('#tabs','click', (e) => { const b = e.target.closest('[data-tab]'); if (b) activateTab(b.dataset.tab); });
-  $$('.bottom-nav .nav-btn').forEach(b => b.addEventListener('click', () => activateTab(b.dataset.tab)));
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+      // Universal [data-tab] router (incl. dashboard buttons)
+      document.addEventListener('click', (ev) => {
+        try {
+          const el = ev.target.closest('[data-tab]');
+          if (el) { ev.preventDefault(); const t = el.getAttribute('data-tab') || el.dataset.tab; if (t) activateTab(t); }
+        } catch(_) {}
+      }, true);
 
-  // Входной гейт
-  if (!gate()) activateTab('auth'); else activateTab('offers');
 
+// --- Dedup toasts for login/logout (avoid double "Вы вышли/вошли") ---
+try {
+  if (!window.__toastDedup && typeof window.showToast === 'function') {
+    const __origShowToast = window.showToast;
+    window.showToast = function(msg, ...rest) {
+      try {
+        if (msg && (String(msg).includes('Вы вышли') || String(msg).includes('Вы вошли'))) {
+          const now = Date.now();
+          if (window.__toastLast === msg && (now - (window.__toastLastTs || 0)) < 1000) {
+            return; // drop duplicate within 1s
+          }
+          window.__toastLast = msg;
+          window.__toastLastTs = now;
+        }
+      } catch(_) {}
+      return __origShowToast(msg, ...rest);
+    };
+    window.__toastDedup = true;
+  }
+} catch(_) {}
+
+      attachPhoneMask($('#loginPhone'));
+      attachPhoneMask($('#registerPhone'));
+      attachPhoneMask($('#profilePhone'));
+      setupPwToggle('toggleLoginPw','loginPassword');
+      setupPwToggle('toggleRegisterPw','registerPassword');
+      setupPwToggle('pwOldToggle','pwOld');
+      setupPwToggle('pwNewToggle','pwNew');
+      CityPicker.setInitial('#cityOpen', '#cityValue');
+      CityPicker.setInitial('#profileCityOpen', '#profileCityValue');
+      bindWorkPresets('.work-presets[data-for="register"]', 'input[name="work_from"]', 'input[name="work_to"]');
+      bindWorkPresets('.work-presets[data-for="profile"]', '#profile_work_from', '#profile_work_to');
+      
+// --- Dashboard actions: route buttons to tabs ---
+try {
+  on('#dashActions [data-tab]', 'click', (e) => {
+    e.preventDefault();
+    const t = e.currentTarget?.getAttribute('data-tab') || e.currentTarget?.dataset?.tab;
+    if (t) activateTab(t);
+  });
+} catch(_) {}
+
+// --- Offer create submit (strict auth + merchant_id) ---
+
+// Offer create submit (strict + aliases + fallback)
+on('#offerForm','submit', async (e) => {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const err = form.querySelector('#offerError');
+  if (err) err.classList.add('hidden');
+
+  const fd = new FormData(form);
+  const toNum = (v) => { const n = parseFloat(String(v||'').replace(',', '.')); return isFinite(n) ? n : 0; };
+  const toInt = (v) => { const n = parseInt(String(v||'').trim(), 10); return isFinite(n) ? n : 0; };
+  const trim = (v) => String(v||'').trim();
+
+  const rid = (state && (state.rid || state.restaurant_id)) || (parseInt(localStorage.getItem('foody_restaurant_id')||'0',10)) || null;
+
+  const payload = {
+    restaurant_id: rid || undefined,
+    restaurantId: rid || undefined,
+    merchant_id: rid || undefined,
+    merchantId: rid || undefined,
+    title: trim(fd.get('title')),
+    original_price: toNum(fd.get('original_price')||fd.get('price_base')) || undefined,
+    price: toNum(fd.get('price')),
+    qty_total: toInt(fd.get('qty_total')||fd.get('quantity')),
+    category: trim(fd.get('category')) || 'other',
+    description: trim(fd.get('description')) || '',
+    image_url: trim(fd.get('image_url')) || undefined,
+  };
+  const ex = trim(fd.get('expires_at'));
+  if (ex) payload.expires_at = dtLocalToIso(ex) || ex;
+  const bb = trim(fd.get('best_before'));
+  if (bb) payload.best_before = dtLocalToIso(bb) || bb;
+  
+  // --- VALIDATE: expires_at must not exceed best_before ---
+  {
+    const parseLocal = (s)=>{
+      if (!s) return null;
+      try {
+        const parts = s.includes('T') ? s.split('T') : s.split(' ');
+        const [Y,M,D] = parts[0].split('-').map(x=>parseInt(x,10));
+        const [h,m] = (parts[1]||'00:00').split(':').map(x=>parseInt(x,10));
+        return new Date(Y, (M-1), D, h||0, m||0, 0, 0);
+      } catch(_) { return null; }
+    };
+    const dEx = parseLocal(ex);
+    const dBb = parseLocal(bb);
+    if (dEx && dBb && dEx.getTime() > dBb.getTime()){
+      showInlineError('#offerError','Срок действия оффера не может превышать срок годности продукта');
+      return; // abort submit
+    }
+  }
+;
+
+
+  if (!payload.title) { showInlineError('#offerError','Укажите название'); return; }
+  if (!(payload.qty_total > 0)) { showInlineError('#offerError','Количество должно быть больше 0'); return; }
+  if (!(payload.price > 0)) { showInlineError('#offerError','Новая цена должна быть больше 0'); return; }
+  if (payload.original_price && payload.price >= payload.original_price) { showInlineError('#offerError','Новая цена должна быть меньше обычной'); return; }
+  if (!payload.expires_at) { showInlineError('#offerError','Укажите срок действия оффера'); return; }
+  if (!rid) { showInlineError('#offerError','Вы не авторизованы. Войдите и попробуйте снова.'); activateTab('auth'); return; }
+
+  const btn = form.querySelector('button[type="submit"]');
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = 'Сохранение…'; }
+    await postOfferStrict(payload);
+    showToast('Оффер сохранён ✓');
+    try { form.reset(); } catch(_){}
+    activateTab('offers');
+    try { await loadOffers(); } catch(_){}
+    try { refreshDashboard && refreshDashboard(); } catch(_){}
+  } catch (e2) {
+    showInlineError('#offerError', e2?.message || 'Ошибка при сохранении');
+    if (String(e2.message||'').startsWith('401')) activateTab('auth');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Создать оффер'; }
+  }
+});
+const ok = gate(); 
+    try { if (ok) { refreshDashboard(); } } catch(_) {}
+if (!ok) activateTab('auth');
+    } catch(e){ console.error(e); const a = document.getElementById('auth'); if (a) { a.classList.add('active'); } }
+  });
 })();
+
+
+// Foody patch: make "Создать оффер" button full width (failsafe)
+(function(){
+  const onReady = (fn)=>{ if (document.readyState==='complete' || document.readyState==='interactive') setTimeout(fn,0);
+                          else document.addEventListener('DOMContentLoaded', fn); };
+  onReady(()=>{
+    try {
+      const form = document.getElementById('offerForm');
+      if (!form) return;
+      const btn = form.querySelector('button[type="submit"]');
+      if (btn){ btn.classList.add('full'); btn.style.width='100%'; btn.style.display='block'; }
+    } catch(_){}
+  });
+})();
+
+
+  // Password eye toggle (global for auth & profile)
+  document.addEventListener('click', function(e){
+    const btn = e.target.closest('.pwd-toggle'); if (!btn) return;
+    const input = btn.parentElement?.querySelector('input'); if (!input) return;
+    const isText = input.type === 'text';
+    input.type = isText ? 'password' : 'text';
+    btn.setAttribute('aria-pressed', (!isText).toString());
+    if (!isText) { input.setAttribute('data-pwd-is-text','1'); } else { input.removeAttribute('data-pwd-is-text'); }
+  });
+
+
+/* === Helpers for QR/Брони === */
+function ruStatus(s){
+  switch(String(s||'').toLowerCase()){
+    case 'active': return 'Активна';
+    case 'redeemed': return 'Погашена';
+    case 'expired': return 'Истёкшая';
+    case 'canceled':
+    case 'cancelled': return 'Отменена';
+    default: return s||'—';
+  }
+}
+function uniqBy(arr, keyFn){
+  const seen = new Set();
+  const out = [];
+  for (const x of arr||[]){
+    const k = keyFn(x);
+    if (k==null) continue;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(x);
+  }
+  return out;
+}
+
+function loadReservations(reset=false){
+  try{
+    const rid = (window.state && window.state.rid) || Number(localStorage.getItem('restaurant_id')||localStorage.getItem('foody_restaurant_id')||0);
+    const key = (window.state && window.state.key) || localStorage.getItem('api_key') || localStorage.getItem('foody_key') || '';
+    if (!rid || !key){
+      const tbl = document.getElementById('reservationsTableBody');
+      if (tbl) tbl.innerHTML = '';
+      const empty = document.getElementById('reservationsEmpty');
+      if (empty) { empty.textContent='Войдите, чтобы просматривать брони'; empty.style.display=''; }
+      return;
+    }
+    if (!window.__resvState || reset){ window.__resvState = { items:[], offset:0, limit:50, total:null }; }
+    const st = window.__resvState;
+    const params = new URLSearchParams();
+    params.set('restaurant_id', String(rid));
+    params.set('status', (document.getElementById('resvStatus')||{}).value||'');
+    params.set('q', (document.getElementById('resvSearch')||{}).value||'');
+    params.set('limit', String(st.limit));
+    params.set('offset', String(st.offset));
+    fetch((window.__FOODY__?.FOODY_API||'https://foodyback-production.up.railway.app') + '/api/v1/merchant/reservations?' + params.toString(), {
+      headers:{ 'X-Foody-Key': key }
+    }).then(r=>r.json().then(d=>[r.status,d])).then(([code, data])=>{
+      if (code>=200 && code<300){
+        const list = Array.isArray(data.items)? data.items : (Array.isArray(data)? data : []);
+        st.total = data.total ?? st.total;
+        st.offset += list.length;
+        const merged = st.items.concat(list);
+        st.items = uniqBy(merged, x => x.id ?? x.code ?? x._id ?? `${x.offer_id||''}:${x.created_at||''}`);
+        renderReservations(st.items);
+      }
+    }).catch(()=>{});
+  }catch(e){ console.error(e); }
+}
+
+
+// Russian labels for reservation statuses
+const STATUS_LABELS = { active:'Активная', redeemed:'Погашена', expired:'Истекла', canceled:'Отменена' };
+
+// Safe render for reservations list (QR tab)
+function renderReservationsList(items){
+  const wrap = document.getElementById('res_rows') || document.getElementById('reservationsBody') || document.getElementById('tbody');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  (items||[]).forEach((r)=>{
+    const tr = document.createElement('div');
+    tr.className = 'row';
+    const st = (STATUS_LABELS[r.status] || r.status);
+    const code = r.code || r.id;
+    const offer = r.offer_title || r.offer_id || '';
+    const created = (r.created_at? new Date(r.created_at).toLocaleString('ru-RU') : '');
+    const until = (r.expires_at? new Date(r.expires_at).toLocaleString('ru-RU') : '');
+    tr.innerHTML = `<div>${created}</div><div>${code}</div><div>${offer}</div><div>${st}</div><div>${until}</div><div style="display:flex;gap:6px;justify-content:flex-end;"><button class="btn btn-ghost btn-small" data-action="redeem" data-code="${code}">Погасить</button><button class="btn btn-ghost btn-small" data-action="cancel" data-code="${code}">Отменить</button></div>`;
+    wrap.appendChild(tr);
+  });
+}
+
+
+/* === Geolocation → Address autofill (registration & profile) === */
+(function(){
+  function ensureHiddenFields(targetId){
+    var el = document.getElementById(targetId);
+    if(!el) return null;
+    var form = el.closest('form') || document;
+    var lat = form.querySelector('input[name="lat"]') || document.createElement('input');
+    var lng = form.querySelector('input[name="lng"]') || document.createElement('input');
+    if(!lat.getAttribute('name')){ lat.type='hidden'; lat.name='lat'; form.appendChild(lat); }
+    if(!lng.getAttribute('name')){ lng.type='hidden'; lng.name='lng'; form.appendChild(lng); }
+    return {lat,lng,form,el};
+  }
+  function setAddress(targetId, text, lat, lng){
+    var els = ensureHiddenFields(targetId);
+    if(!els) return;
+    els.el.value = text || '';
+    els.lat.value = lat!=null? String(lat):'';
+    els.lng.value = lng!=null? String(lng):'';
+  }
+  function composeAddress(obj){
+    if(!obj) return '';
+    var a = obj.address||{};
+    var parts = [];
+    if(a.road) parts.push(a.road);
+    if(a.house_number) parts.push(a.house_number);
+    var street = parts.join(' ').trim();
+    var city = a.city || a.town || a.village || a.municipality || '';
+    var state = a.state || '';
+    var country = a.country || '';
+    var result = [street, city, state, country].filter(Boolean).join(', ');
+    return result || obj.display_name || '';
+  }
+  async function reverseGeocode(lat, lng){
+    try{
+      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&accept-language=ru`;
+      const res = await fetch(url, { headers: { 'Accept':'application/json' } });
+      if(!res.ok) throw new Error('geocode');
+      const data = await res.json();
+      return data;
+    }catch(e){ return null; }
+  }
+  async function geoTo(targetId){
+    var status = document.getElementById('geo_status');
+    if(status){ status.textContent = 'Определяем местоположение…'; }
+    if(!('geolocation' in navigator)){
+      if(status){ status.textContent = 'Геолокация не поддерживается'; }
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(async (pos)=>{
+      const lat = pos.coords.latitude, lng = pos.coords.longitude;
+      if(status){ status.textContent = 'Ищем адрес…'; }
+      const info = await reverseGeocode(lat, lng);
+      const text = composeAddress(info);
+      setAddress(targetId, text, lat, lng);
+      if(status){ status.textContent = 'Адрес подставлен — проверьте и при необходимости исправьте.'; }
+    }, (err)=>{
+      if(status){ status.textContent = 'Не удалось получить геолокацию'; }
+    }, { enableHighAccuracy:true, timeout: 10000 });
+  }
+  function onClick(e){
+    var b = e.target.closest('.geoloc-btn');
+    if(!b) return;
+    var targetId = b.getAttribute('data-target') || 'address';
+    geoTo(targetId);
+  }
+  document.addEventListener('click', onClick);
+  // Auto-suggest on registration open: try once
+  window.foodySuggestGeoOnce = window.foodySuggestGeoOnce || false;
+  function maybeSuggest(){
+    if(window.foodySuggestGeoOnce) return;
+    window.foodySuggestGeoOnce = true;
+    var regAddr = document.getElementById('reg_address');
+    if(regAddr && !regAddr.value){
+      // non-intrusive: show a small hint
+      var hint = document.getElementById('geo_status');
+      if(!hint){ hint = document.createElement('div'); hint.id='geo_status'; hint.className='muted'; regAddr.parentElement.appendChild(hint); }
+      hint.textContent = 'Можно автоматически подставить адрес — нажмите «Определить гео»';
+    }
+  }
+  document.addEventListener('DOMContentLoaded', maybeSuggest);
+})();
+
+
+async function cancelRes(code){
+  const msg = document.getElementById('qr_msg');
+  if (!code) { if(msg){msg.textContent='Введите код'; msg.className='tag badge-warn';} return; }
+  try {
+    const res = await api(`/api/v1/merchant/reservations/${encodeURIComponent(code)}/cancel`, { method:'POST' });
+    if (msg){ msg.textContent = 'Отменено'; msg.className='tag'; }
+    try { refreshDashboard && refreshDashboard(); } catch(_){}
+    try { loadReservations(true); } catch(_){}
+  } catch (e) {
+    if (msg){ msg.textContent = 'Ошибка: ' + (e.message||e); msg.className='tag badge-warn'; }
+  }
+}
