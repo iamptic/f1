@@ -10,81 +10,80 @@
   <script defer src="./app.js"></script>
 </head>
 <body>
-  <div class="tg-shell">
-    <header class="tg-appbar">
-      <div class="tg-appbar__left">
-        <div class="avatar">F</div>
-        <div class="meta">
-          <div class="title">Foody · Витрина</div>
-          <div class="subtitle">Скидки перед закрытием</div>
-        </div>
+  <header class="appbar">
+    <div class="left">
+      <div class="logo">F</div>
+      <div class="tit">
+        <div class="t">Foody</div>
+        <div class="s">Скидки перед закрытием</div>
       </div>
-    </header>
+    </div>
+    <div class="right">
+      <button id="geoBtn" class="btn small" title="Определить геопозицию">Моя гео</button>
+    </div>
+  </header>
 
-    <main class="tg-content">
-      <div class="toolbar">
-        <input id="q" class="search" placeholder="Поиск по названию" />
-        <select id="cat" class="select"><option value="">Все категории</option></select>
-        <select id="sort" class="select">
-          <option value="expire">Сначала истекающие</option>
-          <option value="near">Ближе ко мне</option>
-          <option value="discount">Больше скидка</option>
-          <option value="cheap">Дешевле</option>
-          <option value="expensive">Дороже</option>
-        </select>
-        <div class="geo">
-          <button id="geoBtn" class="btn">Моя гео</button>
-          <select id="radius" class="select">
-            <option value="">Без радиуса</option>
-            <option value="3">≤3 км</option>
-            <option value="5">≤5 км</option>
-            <option value="10">≤10 км</option>
-            <option value="20">≤20 км</option>
-          </select>
-        </div>
-        <button id="refresh" class="btn">Обновить</button>
-      </div>
-      <div id="geoNote" class="muted small"></div>
-      <div id="grid" class="grid"></div>
-      <div id="gridSkeleton" class="grid skeleton hidden"></div>
-    </main>
+  <!-- sticky‑панель фильтров -->
+  <div class="filters sticky">
+    <div class="row">
+      <input id="search" class="search" placeholder="Поиск по названию…" />
+    </div>
+
+    <!-- категории — горизонтальные чипы со скроллом -->
+    <div class="row">
+      <div class="chips scroll" id="catsChips"></div>
+    </div>
+
+    <!-- радиус и сортировки — две независимые горизонтальные ленты -->
+    <div class="row two-lanes">
+      <div class="chips scroll" id="radiusChips"></div>
+      <div class="chips scroll" id="sortChips"></div>
+    </div>
   </div>
 
-  <!-- Bottom Sheet (offer details) -->
-  <div id="sheet" class="sheet hidden" aria-hidden="true">
-    <div class="sheet__dialog">
-      <div class="sheet__h">
-        <div class="sheet__t" id="sTitle">—</div>
-        <button class="sheet__x" id="sheetClose" aria-label="Закрыть">×</button>
+  <main class="content">
+    <div id="grid" class="grid"></div>
+    <div id="gridSkeleton" class="grid skeleton hidden"></div>
+  </main>
+
+  <!-- Шторка детали оффера -->
+  <div id="sheet" class="modal" aria-hidden="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-h">
+        <div id="sTitle" class="modal-title">—</div>
+        <button id="sheetClose" class="x" aria-label="Закрыть">×</button>
       </div>
-      <div class="sheet__b">
-        <img id="sImg" alt="" />
+      <div class="modal-b">
+        <img id="sImg" alt="">
         <div class="meta">
           <div id="sPrice" class="price">—</div>
           <div id="sOld" class="old">—</div>
           <div id="sQty" class="qty">—</div>
-          <div id="sExp" class="exp">—</div><div id="sLeft" class="left muted">—</div>
+          <div id="sExp" class="exp">—</div>
+          <div id="sLeft" class="muted">—</div>
         </div>
-        <div class="desc" id="sDesc">—</div>
-        <div class="actions"><button id="reserveBtn" class="btn primary">Забронировать</button></div>
+        <div id="sDesc" class="desc">—</div>
+        <div class="actions">
+          <button id="reserveBtn" class="btn primary">Забронировать</button>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- QR / Redeem modal -->
-  <div id="qrModal" class="sheet hidden" aria-hidden="true">
-    <div class="sheet__dialog">
-      <div class="sheet__h">
-        <div class="sheet__t">Бронь оформлена</div>
-        <button class="sheet__x" id="qrClose" aria-label="Закрыть">×</button>
+  <!-- Модалка QR -->
+  <div id="qrModal" class="modal" aria-hidden="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-h">
+        <div class="modal-title">Бронь оформлена</div>
+        <button id="qrClose" class="x" aria-label="Закрыть">×</button>
       </div>
-      <div class="sheet__b">
-        <div class="qr-wrap">
-          <canvas id="qrCanvas" width="220" height="220" aria-label="QR-код брони"></canvas>
-        </div>
+      <div class="modal-b">
+        <div class="qr-wrap"><canvas id="qrCanvas" width="220" height="220"></canvas></div>
         <div class="qr-info">
           <div class="qr-code-line">Код для погашения: <strong id="qrCodeText">—</strong></div>
-          <div id="qrHint" class="muted">Покажите этот код или QR сотруднику ресторана для погашения брони.</div>
+          <div id="qrHint" class="muted">Покажите этот код или QR сотруднику ресторана.</div>
         </div>
         <div class="actions">
           <button id="qrOk" class="btn primary">Готово</button>
