@@ -1,0 +1,8 @@
+
+/* Clean password toggle (standard eye/eye-slash, high contrast) */
+body .pw-field{position:relative;}
+body .pw-field input[type="password"], body .pw-field input[type="text"]{padding-right:44px;}
+body .pw-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;background:transparent!important;border:none!important;outline:none;border-radius:10px;cursor:pointer;padding:0;font-size:0;color:transparent!important;}
+body .pw-toggle:hover, body .pw-toggle:focus-visible{background:rgba(0,0,0,.06)!important;}
+body .pw-toggle::before{content:'';display:block;width:22px;height:22px;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z'/><circle cx='12' cy='12' r='3'/></svg>");background-repeat:no-repeat;background-position:center;background-size:22px 22px;}
+body .pw-toggle[aria-pressed="true"]::before{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a20.86 20.86 0 0 1 5.08-5.94'/><path d='M1 1l22 22'/><path d='M9.88 9.88a3 3 0 1 0 4.24 4.24'/></svg>");}
