@@ -45,8 +45,15 @@
     const old=(o.original_price_cents||0)/100; $('#sOld').textContent=old? (old.toFixed(0)+' ₽'):'—';
     $('#sQty').textContent=(o.qty_left??'—') + ' / ' + (o.qty_total??'—');
     $('#sExp').textContent=o.expires_at? new Date(o.expires_at).toLocaleString('ru-RU'):'—';
-    $('#sDesc').textContent=o.description||'';
     const left=timeLeft(o.expires_at); $('#sLeft').textContent=left?('Осталось: '+left):'—';
+
+    // Prefill name/phone/address from localStorage
+    const sName = $('#sName'), sPhone = $('#sPhone'), sAddress = $('#sAddress');
+    const st = JSON.parse(localStorage.getItem('foody_buyer') || '{}');
+    if (sName) sName.value = st.name || '';
+    if (sPhone) sPhone.value = st.phone || '';
+    if (sAddress) sAddress.value = st.address || '';
+
     $('#sheet').classList.remove('hidden');
     $('#sheet').setAttribute('aria-hidden','false');
     $('#reserveBtn').onclick = () => reserve(o);
@@ -54,67 +61,79 @@
   $('#sheetClose').onclick = () => { $('#sheet').classList.add('hidden'); $('#sheet').setAttribute('aria-hidden','true'); };
   $('#qrClose').onclick = closeQR;
   $('#qrOk').onclick = closeQR;
-  function closeQR(){ $('#qrModal').classList.add('hidden'); $('#qrModal').setAttribute('aria-hidden','true'); stopPoll(); }
+  function closeQR(){ $('#qrModal').classList.add('hidden'); $('#qrModal').setAttribute('aria-hidden','true'); }
 
   $('#refresh').onclick = resetAndLoad;
   q.oninput = render;
+
+  // ===== Geolocation & reverse geocode (Nominatim) =====
+  async function reverseGeocode(lat, lng){
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&accept-language=ru`;
+    const res = await fetch(url, { headers: { 'User-Agent': 'FoodyApp/1.0 (contact: support@example.com)' } });
+    const data = await res.json();
+    // Compose readable address
+    const a = data.address||{};
+    const parts = [a.road, a.house_number, a.neighbourhood, a.city||a.town||a.village, a.state, a.country].filter(Boolean);
+    return parts.join(', ') || data.display_name || '';
+  }
+
+  async function geolocate(){
+    const sAddress = $('#sAddress'), sLat = $('#sLat'), sLng = $('#sLng');
+    if (!navigator.geolocation){ toast('Геолокация не поддерживается'); return; }
+    try{
+      const pos = await new Promise((res,rej)=> navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy:true, timeout:10000 }));
+      const { latitude:lat, longitude:lng } = pos.coords;
+      let addr = '';
+      try { addr = await reverseGeocode(lat, lng); } catch(_) {}
+      if (sAddress) sAddress.value = addr || sAddress.value || '';
+      if (sLat) sLat.value = lat; if (sLng) sLng.value = lng;
+      // Save into localStorage for next time
+      const st = JSON.parse(localStorage.getItem('foody_buyer') || '{}');
+      st.address = sAddress?.value || ''; st.lat = lat; st.lng = lng;
+      localStorage.setItem('foody_buyer', JSON.stringify(st));
+      toast(addr ? 'Адрес подставлен' : 'Гео определено');
+    }catch(e){
+      toast('Не удалось определить гео');
+    }
+  }
+  document.addEventListener('click', (ev)=>{
+    const btn = ev.target.closest('#geoBtn');
+    if (btn) { ev.preventDefault(); geolocate(); }
+  });
 
   function showQRCode(text){
     const payload = String(text||'').trim();
     const canvas = document.getElementById('qrCanvas');
     if (!canvas || !window.QRCode) return;
     const ctx = canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height);
-    window.QRCode.toCanvas(canvas, payload || 'NO_CODE', { width: 220, margin: 1 }, (err)=>{ if (err) console.error(err); });
+    window.QRCode.toCanvas(canvas, payload || 'NO_CODE', { width: 220, margin: 1 }, (err)=>{
+      if (err) console.error(err);
+    });
     $('#qrCodeText').textContent = payload || '—';
     const m = $('#qrModal'); m.classList.remove('hidden'); m.setAttribute('aria-hidden','false');
   }
 
-  // === Reservation state (persist + poll) ===
-  const LS_KEY = 'foody_last_reservation';
-  function saveReservation(obj){ try{ localStorage.setItem(LS_KEY, JSON.stringify(obj||{})); }catch{} }
-  function readReservation(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)||'null'); }catch{ return null; } }
-  let pollTimer=null;
-  function stopPoll(){ if (pollTimer){ clearInterval(pollTimer); pollTimer=null; } }
-  function startPoll(idOrCode, expiresAt){
-    stopPoll();
-    updateTimer(expiresAt);
-    pollTimer = setInterval(async ()=>{
-      updateTimer(expiresAt);
-      try{
-        const resp = await fetch(`${API}/api/v1/public/reservations/${encodeURIComponent(idOrCode)}`, {cache:'no-store'});
-        if(!resp.ok) return;
-        const data = await resp.json().catch(()=>null);
-        if(!data) return;
-        $('#qrStatus').textContent = data.status ? `Статус: ${data.status}` : '';
-        if (data.status && (data.status !== 'active')){
-          toast(data.status === 'redeemed' ? 'Бронь погашена ✓' : data.status === 'expired' ? 'Бронь истекла' : 'Статус изменён');
-          stopPoll();
-        }
-      }catch{}
-    }, 3500);
-  }
-  function updateTimer(expiresAt){
-    try{
-      const el=$('#qrTimer');
-      if(!el || !expiresAt){ el.textContent=''; return; }
-      const left=timeLeft(expiresAt);
-      el.textContent = left ? `Осталось: ${left}` : '';
-    }catch{}
-  }
-
-  function showReservation(res){
-    const code = res.code || res.reservation_code || res.qr_code;
-    const payload = res.qr_url || res.url || code || '';
-    showQRCode(payload || code || '');
-    startPoll(code || res.id, res.expires_at);
-  }
-
   async function reserve(o){
     try{
+      const sName = $('#sName'), sPhone = $('#sPhone'), sAddress = $('#sAddress');
+      const sLat = $('#sLat'), sLng = $('#sLng');
+      const name = sName?.value?.trim() || 'Покупатель';
+      const phone = sPhone?.value?.trim() || '';
+      const address = sAddress?.value?.trim() || '';
+      // Save minimal profile
+      localStorage.setItem('foody_buyer', JSON.stringify({ name, phone, address, lat: sLat?.value||'', lng: sLng?.value||'' }));
+
+      const body = {
+        offer_id: o.id || o.offer_id,
+        name, phone, address,
+        lat: sLat?.value ? Number(sLat.value) : undefined,
+        lng: sLng?.value ? Number(sLng.value) : undefined
+      };
+
       const resp = await fetch(API + '/api/v1/public/reserve', {
         mode:'cors', cache:'no-store', referrerPolicy:'no-referrer',
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ offer_id: o.id || o.offer_id, name: 'Buyer', phone: '' })
+        body: JSON.stringify(body)
       });
       const data = await resp.json().catch(()=>({}));
       if(!resp.ok){
@@ -125,14 +144,18 @@
         return;
       }
       toast('Забронировано ✅');
+      // локально уменьшаем остаток
       const item = offers.find(x => x.id === o.id || x.offer_id === o.offer_id);
       if (item && typeof item.qty_left === 'number') item.qty_left = Math.max(0, item.qty_left - 1);
       render();
+
+      // закрыть карточку
       $('#sheet').classList.add('hidden'); $('#sheet').setAttribute('aria-hidden','true');
 
-      const resObj = { id: data.id, offer_id: data.offer_id, code: data.code, expires_at: data.expires_at };
-      saveReservation(resObj);
-      showReservation(resObj);
+      // получить код для погашения
+      const code = data.code || data.reservation_code || data.qr_code || (data.reservation && (data.reservation.code || data.reservation.qr_code));
+      const qrPayload = data.qr_url || data.url || code || '';
+      showQRCode(qrPayload || code || '');
     }catch(e){ console.error(e); toast('Сеть недоступна (CORS?)'); }
   }
 
@@ -159,10 +182,5 @@
   function resetAndLoad(){ offers=[]; total=null; offset=0; render(); loadBatch(); }
   function onScroll(){ const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 320; if(nearBottom) loadBatch(); }
   window.addEventListener('scroll', onScroll);
-  document.addEventListener('DOMContentLoaded', () => {
-    resetAndLoad();
-    // if there is unfinished reservation, show it again
-    const last = readReservation();
-    if(last && last.code){ showReservation(last); }
-  });
+  document.addEventListener('DOMContentLoaded', resetAndLoad);
 })();

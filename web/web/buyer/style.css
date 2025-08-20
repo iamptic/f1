@@ -1,9 +1,5 @@
-/* Foody Buyer unified style (matches merchant palette) */
 :root{
   --bg:#0e1116;--card:#151a21;--text:#e8edf2;--sub:#9aa7b5;--brd:#242b35;--accent:#61d39f;--accent2:#4ab5f1;
-  --shadow:0 12px 30px rgba(0,0,0,.15);
-  --shadow2:0 12px 40px rgba(0,0,0,.25);
-  --card2:#121821;
 }
 html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px/1.45 -apple-system,BlinkMacSystemFont,Inter,Segoe UI,Roboto,Arial}
 .tg-appbar{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:rgba(14,17,22,.74);backdrop-filter:blur(12px);border-bottom:1px solid var(--brd)}
@@ -16,8 +12,9 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px/
 .search{flex:1;background:#0f141c;color:var(--text);border:1px solid var(--brd);border-radius:12px;padding:10px 12px}
 .btn{border:1px solid var(--brd);border-radius:12px;background:#121821;color:var(--text);padding:10px 12px;cursor:pointer}
 .btn.primary{background:linear-gradient(90deg,var(--accent),var(--accent2));border:0;color:#0b0f15;font-weight:800}
+.btn.small{padding:6px 10px;border-radius:10px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
-.card{background:var(--card);border:1px solid var(--brd);border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}
+.card{background:var(--card);border:1px solid var(--brd);border-radius:16px;overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.15)}
 .card img{width:100%;height:140px;object-fit:cover;background:#0d1218}
 .card .p{padding:10px}
 .price{font-weight:800}
@@ -25,7 +22,7 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px/
 .badge{display:inline-block;padding:2px 6px;border:1px solid var(--brd);border-radius:999px;color:var(--sub);font-size:12px;margin-left:6px}
 .sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:grid;place-items:center;z-index:40}
 .sheet.hidden{display:none}
-.sheet__dialog{width:min(760px,96%);background:var(--card);border:1px solid var(--brd);border-radius:16px;box-shadow:var(--shadow2)}
+.sheet__dialog{width:min(760px,96%);background:var(--card);border:1px solid var(--brd);border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
 .sheet__h{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--brd)}
 .sheet__t{font-weight:800}
 .sheet__x{border:0;background:transparent;color:var(--text);font-size:20px;cursor:pointer}
@@ -41,8 +38,12 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px/
 .muted{color:var(--sub)}
 .badge.left{border-color:rgba(255,255,255,.15);color:var(--sub);}
 
-/* QR modal */
 .qr-wrap{display:grid;place-items:center;margin:6px 0 10px}
 .qr-info{margin-top:6px}
 .qr-code-line{font-size:16px}
 .actions{margin-top:12px;display:flex;justify-content:flex-end}
+
+.reserve-form{margin-top:10px;display:grid;gap:10px}
+.reserve-form .row{display:grid;gap:6px}
+.address-line{display:flex;gap:8px;align-items:center}
+.address-line input{flex:1;background:#0f141c;color:var(--text);border:1px solid var(--brd);border-radius:12px;padding:10px 12px}

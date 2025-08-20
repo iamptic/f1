@@ -31,7 +31,7 @@
     </main>
   </div>
 
-  <!-- Bottom Sheet (offer details) -->
+  <!-- Bottom Sheet (offer details + reserve form) -->
   <div id="sheet" class="sheet hidden" aria-hidden="true">
     <div class="sheet__dialog">
       <div class="sheet__h">
@@ -46,7 +46,28 @@
           <div id="sQty" class="qty">—</div>
           <div id="sExp" class="exp">—</div><div id="sLeft" class="left muted">—</div>
         </div>
-        <div id="sDesc" class="desc">—</div>
+
+        <div class="reserve-form">
+          <div class="row">
+            <label for="sName">Имя</label>
+            <input id="sName" placeholder="Как к вам обращаться">
+          </div>
+          <div class="row">
+            <label for="sPhone">Телефон</label>
+            <input id="sPhone" placeholder="+7...">
+          </div>
+          <div class="row">
+            <label for="sAddress">Адрес (автозаполнение по гео)</label>
+            <div class="address-line">
+              <input id="sAddress" placeholder="Ваш адрес (можно отредактировать)" />
+              <button id="geoBtn" class="btn small" type="button">Определить гео</button>
+            </div>
+            <div class="hint muted">Мы возьмём адрес из вашей геолокации — вы сможете поправить вручную.</div>
+            <input type="hidden" id="sLat">
+            <input type="hidden" id="sLng">
+          </div>
+        </div>
+
         <div class="actions"><button id="reserveBtn" class="btn primary">Забронировать</button></div>
       </div>
     </div>
@@ -65,12 +86,10 @@
         </div>
         <div class="qr-info">
           <div class="qr-code-line">Код для погашения: <strong id="qrCodeText">—</strong></div>
-          <div id="qrTimer" class="muted">Осталось: —</div>
-          <div id="qrStatus" class="muted"></div>
           <div id="qrHint" class="muted">Покажите этот код или QR сотруднику ресторана для погашения брони.</div>
         </div>
         <div class="actions">
-          <button id="qrOk" class="btn">Свернуть</button>
+          <button id="qrOk" class="btn primary">Готово</button>
         </div>
       </div>
     </div>
