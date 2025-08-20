@@ -416,7 +416,40 @@
               <video id="qr_video" playsinline muted style="width:100%;border-radius:12px;border:1px solid var(--border);background:#0f172a"></video>
             </div>
           </div>
+        
+        <div class="card">
+          <div class="card-title">Список броней</div>
+          <div class="grid two" style="gap:8px;margin-bottom:8px;">
+            <label>Статус
+              <select id="resvStatus">
+                <option value="">Все</option>
+                <option value="active">Активные</option>
+                <option value="redeemed">Погашены</option>
+                <option value="cancelled">Отменены</option>
+                <option value="expired">Истёкшие</option>
+              </select>
+            </label>
+            <label>Поиск
+              <input id="resvSearch" placeholder="Код/оффер">
+            </label>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+            <button class="btn btn-ghost" id="resvRefresh">Обновить</button>
+            <span id="reservationsEmpty" class="hint"></span>
+          </div>
+          <div id="reservationsList" class="table">
+            <div class="row head">
+              <div>Создана</div>
+              <div>Код</div>
+              <div>Оффер</div>
+              <div>Статус</div>
+              <div>До</div>
+              <div></div>
+            </div>
+            <div id="res_rows"></div>
+          </div>
         </div>
+        
       </section>
 
     </main>

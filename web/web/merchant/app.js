@@ -87,7 +87,9 @@
       $$('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
       const panes = $$('.pane');
       if (panes.length) panes.forEach(p => p.classList.toggle('active', p.id === tab));
-      else { const t = document.getElementById(tab); if (t) t.classList.add('active'); }
+      else { const t = document.getElementById(tab); if (t) t.classList.add('active'); 
+      if (tab === 'qr') { try{ initQrTab(); loadReservations(true); }catch(_){} }
+}
       if (tab === 'offers') loadOffers();
       if (tab === 'profile') loadProfile();
       if (tab === 'export') updateCreds();
@@ -1076,7 +1078,7 @@ function renderReservationsList(items){
     const offer = r.offer_title || r.offer_id || '';
     const created = (r.created_at? new Date(r.created_at).toLocaleString('ru-RU') : '');
     const until = (r.expires_at? new Date(r.expires_at).toLocaleString('ru-RU') : '');
-    tr.innerHTML = `<div>${created}</div><div>${code}</div><div>${offer}</div><div>${st}</div><div>${until}</div>`;
+    tr.innerHTML = `<div>${created}</div><div>${code}</div><div>${offer}</div><div>${st}</div><div>${until}</div><div style="display:flex;gap:6px;justify-content:flex-end;"><button class="btn btn-ghost btn-small" data-action="redeem" data-code="${code}">Погасить</button><button class="btn btn-ghost btn-small" data-action="cancel" data-code="${code}">Отменить</button></div>`;
     wrap.appendChild(tr);
   });
 }
@@ -1163,3 +1165,17 @@ function renderReservationsList(items){
   }
   document.addEventListener('DOMContentLoaded', maybeSuggest);
 })();
+
+
+async function cancelRes(code){
+  const msg = document.getElementById('qr_msg');
+  if (!code) { if(msg){msg.textContent='Введите код'; msg.className='tag badge-warn';} return; }
+  try {
+    const res = await api(`/api/v1/merchant/reservations/${encodeURIComponent(code)}/cancel`, { method:'POST' });
+    if (msg){ msg.textContent = 'Отменено'; msg.className='tag'; }
+    try { refreshDashboard && refreshDashboard(); } catch(_){}
+    try { loadReservations(true); } catch(_){}
+  } catch (e) {
+    if (msg){ msg.textContent = 'Ошибка: ' + (e.message||e); msg.className='tag badge-warn'; }
+  }
+}
