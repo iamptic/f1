@@ -135,10 +135,20 @@
       <div class="card kpi"><div class="card-title small">Истекают &lt; 2ч</div><div id="kpiSoon" class="big">—</div></div>
     </div>
     <div id="dashActions" style="display:none;margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+
       <button class="btn btn-primary" data-tab="create">Создать оффер</button>
       <button class="btn btn-ghost" data-tab="offers">Мои офферы</button>
     </div>
   </div>
+<div class="card" id="dashSoonCard" style="display:none;">
+  <div class="card-title">Скоро истекают</div>
+  <div id="dashSoonList" class="mini-list"></div>
+</div>
+<div class="card" id="dashResCard" style="display:none;">
+  <div class="card-title">Активные брони</div>
+  <div id="dashResList" class="mini-list"></div>
+  <div id="dashResNote" class="muted small" style="display:none;">Секция скрыта: API недоступен.</div>
+</div>
 </section>
 
       

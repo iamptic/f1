@@ -718,6 +718,8 @@ async function refreshDashboard(){
     const data = await api(`/api/v1/merchant/offers?restaurant_id=${encodeURIComponent(state.rid)}`);
     const list = data?.items || data?.results || data || [];
     renderDashboard(list);
+    try{ renderSoonList(list); }catch(_){}
+    try{ loadReservations(); }catch(_){}
   }catch(e){
     if (guest) guest.style.display='block';
     if (stats) stats.style.display='none';
@@ -884,11 +886,49 @@ async function postOfferStrict(payload) {
       if (msg){ msg.textContent='Не удалось открыть камеру'; msg.className='tag badge-warn'; }
     }
   }
-  function initQrTab(){
-    const r = document.getElementById('qr_redeem_btn');
-    const s = document.getElementById('qr_scan_btn');
-    const inp = document.getElementById('qr_code');
-    if (r && !r.dataset.bound){ r.dataset.bound='1'; r.addEventListener('click', ()=> redeem((document.getElementById('qr_code')||{}).value||'')); }
+  
+function initQrTab(){
+  const r = document.getElementById('qr_redeem_btn');
+  const s = document.getElementById('qr_scan_btn');
+  const inp = document.getElementById('qr_code');
+  if (r && !r.dataset.bound){ r.dataset.bound='1'; r.addEventListener('click', ()=> redeem((document.getElementById('qr_code')||{}).value||'')); }
+  if (s && !s.dataset.bound){ s.dataset.bound='1'; s.addEventListener('click', startScan); }
+  if (inp && !inp.dataset.bound){
+    inp.dataset.bound='1';
+    inp.addEventListener('keydown', (ev)=>{ if (ev.key==='Enter'){ ev.preventDefault(); redeem(inp.value||''); }});
+  }
+  // Reservations: filters + load + actions
+  const q = document.getElementById('res_q');
+  const st = document.getElementById('res_status');
+  const more = document.getElementById('res_more');
+  const list = document.getElementById('res_rows');
+  if (q && !q.dataset.bound){
+    q.dataset.bound='1';
+    q.addEventListener('input', ()=>{ if (!state._resv) state._resv={}; state._resv.q = (q.value||'').trim(); loadReservations(true); });
+  }
+  if (st && !st.dataset.bound){
+    st.dataset.bound='1';
+    st.addEventListener('change', ()=>{ if (!state._resv) state._resv={}; state._resv.status = st.value||''; loadReservations(true); });
+  }
+  if (more && !more.dataset.bound){
+    more.dataset.bound='1';
+    more.addEventListener('click', ()=> loadReservations(false));
+  }
+  if (list && !list.dataset.bound){
+    list.dataset.bound='1';
+    list.addEventListener('click', (e)=>{
+      const btn = e.target.closest('[data-resv]'); if (!btn) return;
+      const act = btn.getAttribute('data-resv');
+      const id = btn.getAttribute('data-id') || btn.getAttribute('data-code');
+      if (!act || !id) return;
+      resvAction(act, id);
+    });
+  }
+  // initial load
+  loadReservations(true);
+  try { inp && inp.focus(); } catch(_) {}
+}
+
     if (s && !s.dataset.bound){ s.dataset.bound='1'; s.addEventListener('click', startScan); }
     if (inp && !inp.dataset.bound){ inp.dataset.bound='1'; inp.addEventListener('keydown', (ev)=>{ if(ev.key==='Enter'){ ev.preventDefault(); redeem(inp.value||''); } }); setTimeout(()=>{ try{ inp.focus(); }catch(_){}} , 50); }
     // reservations bindings
