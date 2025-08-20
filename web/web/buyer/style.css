@@ -1,45 +1,35 @@
-:root{--bg:#0e1116;--card:#151a21;--text:#e8edf2;--sub:#9aa7b5;--brd:#242b35;--accent:#61d39f;--accent2:#4ab5f1;}
-html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px/1.45 Inter,Segoe UI,Roboto,Arial}
-.tg-appbar{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:rgba(14,17,22,.74);backdrop-filter:blur(12px);border-bottom:1px solid var(--brd)}
-.tg-appbar__left{display:flex;gap:10px;align-items:center}
-.avatar{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#0e1116;font-weight:800}
-.meta .title{font-weight:800}.meta .subtitle{color:var(--sub);font-size:12px}
-.tg-content{width:min(1100px,96%);margin:14px auto;display:grid;gap:14px}
-.toolbar{display:flex;gap:8px;flex-wrap:wrap}
-.search,.select{background:#0f141c;color:var(--text);border:1px solid var(--brd);border-radius:12px;padding:10px 12px}
-.search{flex:1;min-width:180px}
-.select{min-width:160px}
-.btn{border:1px solid var(--brd);border-radius:12px;background:#121821;color:var(--text);padding:10px 12px;cursor:pointer}
-.btn.primary{background:linear-gradient(90deg,var(--accent),var(--accent2));border:0;color:#0b0f15;font-weight:800}
-.geo{display:flex;gap:8px;align-items:center}
-.small{font-size:12px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
-.card{background:var(--card);border:1px solid var(--brd);border-radius:16px;overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.15)}
-.card img{width:100%;height:140px;object-fit:cover;background:#0d1218}
-.card .p{padding:10px}
-.price{font-weight:800}
-.old{color:var(--sub);text-decoration:line-through}
-.badge{display:inline-block;padding:2px 6px;border:1px solid var(--brd);border-radius:999px;color:var(--sub);font-size:12px;margin-left:6px}
-.sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:grid;place-items:center;z-index:40}
-.sheet.hidden{display:none}
-.sheet__dialog{width:min(760px,96%);background:var(--card);border:1px solid var(--brd);border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
-.sheet__h{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--brd)}
-.sheet__t{font-weight:800}
-.sheet__x{border:0;background:transparent;color:var(--text);font-size:20px;cursor:pointer}
-.sheet__b{padding:12px}
-.sheet img{width:100%;height:220px;object-fit:cover;border-radius:12px;border:1px solid var(--brd)}
-.meta{display:flex;gap:12px;margin-top:8px;flex-wrap:wrap}
-.desc{color:var(--sub);margin-top:8px}
-#toast{position:fixed;right:12px;bottom:16px;display:grid;gap:8px;z-index:60}
-.toast{background:#0f141c;border:1px solid var(--brd);border-left:6px solid var(--accent2);padding:10px 12px;border-radius:12px}
-.grid.skeleton .card{height:220px;border:1px solid var(--brd);border-radius:16px;background:linear-gradient(90deg,#111722,#141b26,#111722);background-size:200% 100%;animation:shimmer 1.3s linear infinite;}
-@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-.hidden{display:none}
-.muted{color:var(--sub)}
-.badge.left{border-color:rgba(255,255,255,.15);color:var(--sub);}
-.qr-wrap{display:grid;place-items:center;margin:6px 0 10px}
-.qr-info{margin-top:6px}
-.qr-code-line{font-size:16px}
-.actions{margin-top:12px;display:flex;justify-content:flex-end}
+
 /* Foody v17: clamp description lines in cards */
 .desc{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+
+/* === Offer cards (LK) === */
+#offerList.offer-cards{ 
+  display:grid; 
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.offer-card{
+  background:#12171e;
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:12px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  transition:.15s border-color ease, .15s transform ease;
+}
+.offer-card:hover{ border-color: rgba(74,181,241,.35); transform: translateY(-1px); }
+.offer-card__top{ display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.offer-card__title{ font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.offer-card__badge{ background:rgba(97,211,159,.18); color:#a9e8cc; border:1px solid rgba(97,211,159,.35); border-radius:10px; padding:4px 8px; font-weight:800; font-size:12px; }
+.offer-card__img{ width:100%; aspect-ratio: 4/3; background:#0d1218; border:1px dashed var(--border); border-radius:10px; overflow:hidden; display:grid; place-items:center; }
+.offer-card__img img{ width:100%; height:100%; object-fit:cover; display:block; }
+.offer-card__img--ph{ color: var(--subtext); font-size:12px; }
+.offer-card__prices{ display:flex; align-items:baseline; gap:10px; }
+.offer-card__price{ font-size:20px; font-weight:800; }
+.offer-card__old{ color:#9aa7b5; text-decoration:line-through; }
+.offer-card__meta{ display:flex; flex-wrap:wrap; gap:6px; }
+.offer-card__meta .chip{ padding:4px 8px; border:1px solid var(--border); border-radius:10px; font-size:12px; color:var(--subtext); }
+.offer-card__desc{ color: var(--subtext); font-size: 13px; min-height: 34px; }
+.offer-card__actions{ display:flex; gap:8px; justify-content:flex-end; margin-top:auto; }
