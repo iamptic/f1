@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Foody · ЛК ресторана</title>
-
-  <link rel="stylesheet" href="./style.css?v=qr-list-1" />
+  <link rel="stylesheet" href="./style.css?v=dark2" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+  <!-- FilePond CSS -->
   <link href="https://unpkg.com/filepond@4.30.7/dist/filepond.min.css" rel="stylesheet">
   <link href="https://unpkg.com/filepond-plugin-image-preview@4.6.12/dist/filepond-plugin-image-preview.min.css" rel="stylesheet">
   <link href="./offer_photo_filepond.css" rel="stylesheet">
@@ -14,27 +14,59 @@
 
   <script defer src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ru.js"></script>
-  <script>window.foodyApi = (window.__FOODY__ && window.__FOODY__.FOODY_API) || 'https://foodyback-production.up.railway.app';</script>
+  <script>window.foodyApi = (window.__FOODY__ && window.__FOODY__.FOODY_API) || window.foodyApi || 'https://foodyback-production.up.railway.app';</script>
   <script defer src="/config.js"></script>
-  <script defer src="./app.js?v=qr-list-1"></script>
+  <script defer src="./app.js?v=no247-9"></script>
 
-  <!-- Центрирование городского модального окна оставляем как было -->
+  <!-- Центровка модалок без изменения остального дизайна -->
   <style>
+    /* City picker modal */
+    #cityModal[aria-hidden="true"] { display: none; }
+    #cityModal[aria-hidden="false"] { display: block; }
+    #cityModal { position: fixed; inset: 0; z-index: 50; }
+    #cityModal .modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.5); backdrop-filter: blur(2px); }
+    #cityModal .modal-dialog { position: relative; max-width: 520px; margin: 6vh auto; background: var(--card-bg, #121212); color: var(--fg, #fff); border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.4); overflow: hidden; }
+    #cityModal .modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 18px; font-weight:600; border-bottom: 1px solid rgba(255,255,255,.08); }
+    #cityModal .modal-body { padding: 14px 16px 16px; }
+    #cityModal .close { background: transparent; border:none; font-size:20px; line-height:1; color: inherit; cursor: pointer; opacity:.8; }
+    #cityModal .close:hover { opacity:1; }
+    .city-search { width: 100%; padding: 10px 12px; border-radius: 10px; border:1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); color: inherit; outline: none; }
+    .city-search::placeholder { opacity:.6; }
+    .city-grid { margin-top: 12px; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+    @media (min-width: 480px) { .city-grid { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+    .city-chip { padding: 10px 12px; border-radius: 12px; text-align:center; cursor:pointer; user-select:none;
+      border:1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); transition: transform .06s ease, background .2s ease, border-color .2s ease; }
+    .city-chip:hover { transform: translateY(-1px); background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.2); }
+    .city-chip.active { background: rgba(0, 180, 120, .2); border-color: rgba(0, 180, 120, .4); }
+    .city-other { margin-top: 12px; display:flex; gap:8px; align-items:center; }
+    .city-other input { flex:1; padding: 10px 12px; border-radius: 10px; border:1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); color: inherit; }
+    .city-other .btn { white-space:nowrap; }
+    .city-picker { display:flex; gap:8px; align-items:center; }
+    .city-display { flex:1; display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); cursor:pointer; }
+    .city-display .hint { opacity:.7; }
+    .city-display .value { font-weight:600; }
+    .city-display .caret { opacity:.6; }
+
+    /* Offer Edit modal centering (на случай редактирования) */
     #offerEditModal { position: fixed; inset: 0; display: none; z-index: 60; place-items: center; }
     #offerEditModal._open,
     #offerEditModal.open,
     #offerEditModal[aria-hidden="false"],
-    #offerEditModal[style*="display:block"]{ display: grid !important; }
+    #offerEditModal[style*="display:block"],
+    #offerEditModal[style*="display: block"]{ display: grid !important; }
     #offerEditModal .modal-dim { position: absolute; inset: 0; background: rgba(0,0,0,.55); }
     #offerEditModal .modal-card { position: relative; width: min(640px, 94vw); max-height: 90vh; overflow: auto; border-radius: 16px; }
   </style>
+
+  <link href="./foody.pw.css" rel="stylesheet">
+  <link href="./offers_actions.css" rel="stylesheet">
 </head>
 <body>
   <div class="app">
     <header class="tg-header">
       <div class="tg-header__left">
         <div class="avatar">🍽️</div>
-        <div>
+        <div class="titles">
           <div class="title">Foody</div>
           <div class="subtitle">Личный кабинет ресторана</div>
         </div>
@@ -53,47 +85,316 @@
     </nav>
 
     <main class="content">
-      <!-- Дашборд, Создать, Офферы, Профиль — оставлены без изменений в этом патче -->
 
-      <!-- QR / БРОНИ -->
-      <section class="pane" id="qr">
+      <!-- Дашборд -->
+      <section class="pane active" id="dashboard">
         <div class="card">
-          <div class="card-title">Погашение брони</div>
-          <div class="grid two">
-            <div>
-              <label>Код брони
-                <input id="qr_code" placeholder="Вставьте код брони или отсканируйте" />
-              </label>
-              <div style="display:flex;gap:8px;align-items:center;justify-content:flex-start;margin-top:8px;">
-                <button class="btn btn-primary" id="qr_redeem_btn">Погасить</button>
-                <button class="btn btn-ghost" id="qr_scan_btn">Сканировать камерой</button>
-                <span id="qr_msg" class="tag">Готово к работе</span>
-              </div>
-            </div>
-            <div>
-              <video id="qr_video" playsinline muted style="width:100%;border-radius:12px;border:1px solid var(--border);background:#0f172a"></video>
-            </div>
+          <div class="card-title">Дашборд</div>
+          <p id="dashGuest" class="muted">Войдите или зарегистрируйтесь, чтобы создавать офферы и управлять профилем.</p>
+          <div id="dashStats" class="grid two" style="display:none;gap:12px;">
+            <div class="card kpi"><div class="card-title small">Активные офферы</div><div id="kpiActive" class="big">—</div></div>
+            <div class="card kpi"><div class="card-title small">Остаток, шт</div><div id="kpiQty" class="big">—</div></div>
+            <div class="card kpi"><div class="card-title small">Потенц. выручка</div><div id="kpiRevenue" class="big">—</div></div>
+            <div class="card kpi"><div class="card-title small">Истекают &lt; 2ч</div><div id="kpiSoon" class="big">—</div></div>
           </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">Активные брони</div>
-          <div class="muted" style="margin-bottom:8px">Список обновляется автоматически. Нажмите «Погасить» напротив нужной брони.</div>
-          <div id="qrList" class="table like-list">
-            <div class="skeleton"></div>
-            <div class="skeleton"></div>
+          <div id="dashActions" style="display:none;margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-primary" data-tab="create">Создать оффер</button>
+            <button class="btn btn-ghost" data-tab="offers">Мои офферы</button>
           </div>
         </div>
       </section>
+
+      <!-- Аутентификация -->
+      <section class="pane" id="auth">
+        <div class="card card-glass">
+          <div class="card-title">Войдите или зарегистрируйтесь</div>
+
+          <div class="auth-switch">
+            <input type="radio" name="authmode" id="mode-login" checked>
+            <input type="radio" name="authmode" id="mode-register">
+            <div class="track"><span class="thumb"></span></div>
+            <div class="labels">
+              <label for="mode-login">Вход</label>
+              <label for="mode-register">Регистрация</label>
+            </div>
+          </div>
+
+          <div class="auth-forms">
+            <form id="loginForm" class="form">
+              <label>Телефон
+                <input name="login" id="loginPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+7 900 000 00 00" required>
+              </label>
+              <label>Пароль
+                <div class="pw-field">
+                  <input name="password" id="loginPassword" type="password" placeholder="••••••••" required>
+                  <button class="pw-toggle" id="toggleLoginPw" type="button" aria-label="Показать пароль" aria-pressed="false">👁</button>
+                </div>
+              </label>
+              <div id="loginError" class="form-error hidden"></div>
+              <button class="btn btn-primary" type="submit">Войти</button>
+            </form>
+
+            <form id="registerForm" class="form grid two">
+              <label>Название ресторана
+                <input name="name" placeholder="Кафе Плюс" required>
+              </label>
+              <label>Телефон
+                <input name="login" id="registerPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+7 900 000 00 00" required>
+              </label>
+              <label class="full">Город
+                <div class="city-picker">
+                  <div id="cityOpen" class="city-display w-full">
+                    <span class="hint">Выберите город</span>
+                    <span class="value"></span>
+                    <span class="caret">▾</span>
+                  </div>
+                  <input type="hidden" name="city" id="cityValue">
+                </div>
+              </label>
+              <label class="full">Адрес (улица, дом)
+                <input name="address" placeholder="Напр., Невский проспект, 10">
+              </label>
+              <label>Время работы — с
+                <input name="work_from" type="time" placeholder="09:00">
+              </label>
+              <label>до
+                <input name="work_to" type="time" placeholder="22:00">
+              </label>
+              <div class="work-presets" data-for="register">
+                <span class="chip" data-from="10:00" data-to="22:00">10:00–22:00</span>
+                <span class="chip" data-from="09:00" data-to="21:00">09:00–21:00</span>
+                <span class="chip" data-from="00:00" data-to="23:59">24/7</span>
+              </div>
+              <label class="full">Пароль
+                <div class="pw-field">
+                  <input name="password" id="registerPassword" type="password" placeholder="мин. 6 символов" minlength="6" required>
+                  <button class="pw-toggle" id="toggleRegisterPw" type="button" aria-label="Показать пароль" aria-pressed="false">👁</button>
+                </div>
+              </label>
+              <div id="registerError" class="form-error hidden"></div>
+              <button class="btn btn-primary" type="submit">Зарегистрироваться</button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- Создать оффер -->
+      <section class="pane" id="create">
+        <div class="card">
+          <div class="card-title">Создать оффер</div>
+          <form id="offerForm" class="form grid two">
+            <label class="full">Название
+              <input name="title" placeholder="Напр., Набор суши «Закат»" required>
+            </label>
+
+            <label>Старая цена (до скидки)
+              <input name="original_price" id="offerOldPrice" type="number" min="0" step="1" placeholder="Напр., 350" required>
+            </label>
+
+            <div class="full">
+              <div class="work-presets" id="discountPresets">
+                <span class="chip" data-discount="30">-30%</span>
+                <span class="chip" data-discount="40">-40%</span>
+                <span class="chip" data-discount="50">-50%</span>
+                <span class="chip" data-discount="60">-60%</span>
+                <span class="chip" data-discount="70">-70%</span>
+                <span class="chip" data-discount="80">-80%</span>
+                <span class="chip" data-discount="90">-90%</span>
+              </div>
+            </div>
+
+            <label>Новая цена
+              <input name="price" id="offerPrice" type="number" min="0" step="1" placeholder="например, 190" required>
+            </label>
+
+            <label>Остаток / Количество, шт
+              <input name="qty_total" type="number" min="1" step="1" value="1" required>
+            </label>
+
+            <label class="full">Срок годности продукта
+              <input name="best_before" id="best_before" type="datetime-local">
+              <div class="muted small">Будет сохранено и учитываться при проверках.</div>
+            </label>
+
+            <label class="full">Срок действия оффера
+              <input name="expires_at" id="expires_at" placeholder="Сегодня 21:00" required>
+            </label>
+            <div class="full">
+              <div class="work-presets" id="expirePresets">
+                <span class="chip" data-action="close" id="expireToClose" style="display:none">К закрытию</span>
+              </div>
+            </div>
+
+            <label class="full">Категория
+              <select class="nice-select" name="category">
+                <option value="ready_meal">Готовые блюда</option>
+                <option value="bakery">Выпечка</option>
+                <option value="sushi">Суши/роллы</option>
+                <option value="salad">Салаты</option>
+                <option value="dessert">Десерты</option>
+                <option value="other">Другое</option>
+              </select>
+            </label>
+
+            <!-- Фото (если используешь) -->
+            <div class="field">
+              <label for="offerImage">Фото (опционально)</label>
+              <input type="file" id="offerImage" name="offerImage" accept="image/*">
+              <input type="hidden" id="offerImageUrl" name="image_url">
+              <p class="hint">Поддерживаются JPG/PNG/WebP до 5 МБ</p>
+            </div>
+
+            <label class="full">
+              <textarea name="description" rows="3" placeholder="Кратко: состав, порции и т.п."></textarea>
+            </label>
+
+            <div class="full" style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-primary" type="submit">Создать</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- Офферы -->
+      <section class="pane" id="offers">
+        <div class="card">
+          <div class="card-title">Мои офферы</div>
+          <div id="offerList" class="table">
+            <div class="row head">
+              <div>Название</div><div>Цена</div><div>Скидка</div><div>Ост.</div><div>Истекает</div><div></div>
+            </div>
+            <!-- список рендерится JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Профиль -->
+      <section class="pane" id="profile">
+        <div class="card">
+          <div class="card-title">Профиль ресторана</div>
+          <form id="profileForm" class="form grid two">
+            <label>Название
+              <input name="name" placeholder="Кафе Плюс">
+            </label>
+            <label>Телефон
+              <input id="profilePhone" name="phone" placeholder="+7 900 000 00 00">
+            </label>
+
+            <label class="full">Город
+              <div class="city-picker">
+                <div id="profileCityOpen" class="city-display w-full">
+                  <span class="hint">Выберите город</span>
+                  <span class="value"></span>
+                  <span class="caret">▾</span>
+                </div>
+                <input type="hidden" id="profileCityValue" name="city">
+              </div>
+            </label>
+
+            <label class="full">Адрес
+              <input name="address" placeholder="Невский проспект, 10">
+            </label>
+
+            <label>Время работы — с
+              <input name="work_from" type="time" placeholder="09:00">
+            </label>
+            <label>до
+              <input name="work_to" type="time" placeholder="22:00">
+            </label>
+
+            <div class="work-presets" id="profileWorkPresets">
+              <span class="chip" data-from="10:00" data-to="22:00">10:00–22:00</span>
+              <span class="chip" data-from="09:00" data-to="21:00">09:00–21:00</span>
+              <span class="chip" data-from="00:00" data-to="23:59">24/7</span>
+            </div>
+
+            <div class="full">
+              <div id="profileError" class="form-error hidden"></div>
+              <div id="profileSaved" class="ok-badge" style="display:none">Сохранено ✅</div>
+            </div>
+
+            <div class="full" style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-primary" type="submit">Сохранить</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Смена пароля</div>
+          <form id="pwForm" class="form grid two">
+            <label class="full">Текущий пароль
+              <div class="pw-field">
+                <input id="pwOld" type="password" placeholder="••••••••">
+                <button id="pwOldToggle" class="pw-toggle" type="button">👁</button>
+              </div>
+            </label>
+            <label>Новый пароль
+              <div class="pw-field">
+                <input id="pwNew" type="password" placeholder="мин. 6 символов">
+                <button id="pwNewToggle" class="pw-toggle" type="button">👁</button>
+              </div>
+            </label>
+            <label>Повторите новый
+              <input id="pwNew2" type="password" placeholder="••••••••">
+            </label>
+            <div class="full">
+              <div id="pwError" class="form-error hidden"></div>
+              <div id="pwSaved" class="ok-badge" style="display:none">Пароль изменён ✅</div>
+            </div>
+            <div class="full" style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-primary" type="submit">Сменить пароль</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- QR / Брони -->
+      <section class="pane" id="qr">
+        <div class="card">
+          <div class="card-title">Брони (QR)</div>
+          <div id="resvList" class="list">
+            <!-- список броней подставит JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Экспорт (опционально) -->
+      <section class="pane" id="export" style="display:none">
+        <div class="card">
+          <div class="card-title">Экспорт</div>
+          <pre id="creds" class="dump small"></pre>
+        </div>
+      </section>
+
     </main>
 
+    <!-- Нижняя навигация для мобилок -->
     <nav class="bottom-nav">
-      <button class="nav-btn active" data-tab="dashboard" title="Дашборд">🏠</button>
-      <button class="nav-btn" data-tab="offers" title="Офферы">🛍️</button>
-      <button class="nav-btn fab" data-tab="create" title="Создать">＋</button>
-      <button class="nav-btn" data-tab="profile" title="Профиль">👤</button>
-      <button class="nav-btn" data-tab="qr" title="QR / Брони">🧾</button>
+      <button class="nav-btn" data-tab="dashboard">Дашборд</button>
+      <button class="nav-btn" data-tab="offers">Офферы</button>
+      <button class="nav-btn fab" data-tab="create">＋</button>
+      <button class="nav-btn" data-tab="qr">QR</button>
+      <button class="nav-btn" data-tab="profile">Профиль</button>
     </nav>
+  </div>
+
+  <!-- City Picker Modal -->
+  <div id="cityModal" aria-hidden="true">
+    <div id="cityBackdrop" class="modal-backdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>Выберите город</div>
+        <button id="cityClose" class="close">×</button>
+      </div>
+      <div class="modal-body">
+        <input id="citySearch" class="city-search" placeholder="Поиск города…" />
+        <div id="cityGrid" class="city-grid"></div>
+        <div id="cityOtherWrap" class="city-other" style="display:none">
+          <input id="cityOtherInput" type="text" placeholder="Другой город">
+          <button id="cityOtherApply" class="btn btn-primary">Ок</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="toast"></div>
