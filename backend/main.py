@@ -927,3 +927,37 @@ async def change_password(payload: dict = Body(...), request: Request = None):
             raise HTTPException(status_code=401, detail="invalid current password")
         await conn.execute("UPDATE merchants SET password_hash=$2 WHERE id=$1", restaurant_id, _hash_password(new_password))
         return {"ok": True}
+
+
+class PublicReservationStatusOut(BaseModel):
+    id: int
+    offer_id: int
+    code: str | None = None
+    status: str
+    expires_at: str | None = None
+
+@app.get("/api/v1/public/reservations/{res}", response_model=PublicReservationStatusOut)
+async def public_reservation_status(res: str):
+    """
+    Public endpoint to check reservation status by id or code.
+    Does not reveal PII (name/phone). Intended for buyer polling after reserve.
+    """
+    async with _pool.acquire() as conn:
+        # Try by id numeric else by code
+        row = None
+        if res.isdigit():
+            row = await conn.fetchrow(
+                "SELECT id, offer_id, code, status, expires_at FROM reservations WHERE id=$1",
+                int(res)
+            )
+        if not row:
+            row = await conn.fetchrow(
+                "SELECT id, offer_id, code, status, expires_at FROM reservations WHERE code=$1",
+                res
+            )
+        if not row:
+            raise HTTPException(status_code=404, detail="reservation not found")
+        d = dict(row)
+        if d.get("expires_at"):
+            d["expires_at"] = d["expires_at"].astimezone(timezone.utc).isoformat()
+        return d
