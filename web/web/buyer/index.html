@@ -23,18 +23,13 @@
     </div>
   </header>
 
-  <!-- sticky‑панель фильтров -->
   <div class="filters sticky">
     <div class="row">
       <input id="search" class="search" placeholder="Поиск по названию…" />
     </div>
-
-    <!-- категории — горизонтальные чипы со скроллом -->
     <div class="row">
       <div class="chips scroll" id="catsChips"></div>
     </div>
-
-    <!-- радиус и сортировки — две независимые горизонтальные ленты -->
     <div class="row two-lanes">
       <div class="chips scroll" id="radiusChips"></div>
       <div class="chips scroll" id="sortChips"></div>
@@ -80,7 +75,9 @@
         <button id="qrClose" class="x" aria-label="Закрыть">×</button>
       </div>
       <div class="modal-b">
-        <div class="qr-wrap"><canvas id="qrCanvas" width="220" height="220"></canvas></div>
+        <div class="qr-wrap">
+          <canvas id="qrCanvas" width="220" height="220"></canvas>
+        </div>
         <div class="qr-info">
           <div class="qr-code-line">Код для погашения: <strong id="qrCodeText">—</strong></div>
           <div id="qrHint" class="muted">Покажите этот код или QR сотруднику ресторана.</div>
