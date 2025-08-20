@@ -19,10 +19,19 @@
 <script defer src="./app.js?v=no247-9"></script>
   <style>
     #cityModal[aria-hidden="true"] { display: none; }
-    #cityModal[aria-hidden="false"] { display: block; }
-    #cityModal { position: fixed; inset: 0; z-index: 50; }
-    #cityModal .modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.5); backdrop-filter: blur(2px); }
-    #cityModal .modal-dialog { position: relative; max-width: 520px; margin: 6vh auto; background: var(--card-bg, #121212); color: var(--fg, #fff); border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.4); overflow: hidden; }
+    #cityModal[aria-hidden="false"] { display: flex; }
+    #cityModal {
+      position: fixed; inset: 0; z-index: 50;
+      display: none; align-items: center; justify-content: center; /* center */
+    }
+    #cityModal .modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.55); backdrop-filter: blur(2px); }
+    #cityModal .modal-dialog {
+      position: relative; width: min(520px, 92vw);
+      max-height: 90vh; overflow: auto;
+      background: var(--card, #151a21); color: var(--text, #e8edf2);
+      border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.4);
+      border: 1px solid var(--border, rgba(255,255,255,.12));
+    }
     #cityModal .modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 18px; font-weight:600; border-bottom: 1px solid rgba(255,255,255,.08); }
     #cityModal .modal-body { padding: 14px 16px 16px; }
     #cityModal .close { background: transparent; border:none; font-size:20px; line-height:1; color: inherit; cursor: pointer; opacity:.8; }
