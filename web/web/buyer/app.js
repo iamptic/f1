@@ -33,22 +33,15 @@
     },
     set: (obj) => { localStorage.setItem("buyer_geo", JSON.stringify(obj||{})); }
   };
-  const state = {
-    q: "", cat: "all", radius: 0,
-    sort: "expire" // expire | near | discount | cheap | expensive
-  };
-  const saveFilters = debounce(() => {
-    localStorage.setItem(FILTERS_KEY, JSON.stringify(state));
-  }, 200);
+  const state = { q:"", cat:"all", radius:0, sort:"expire" }; // expire | near | discount | cheap | expensive
+  const saveFilters = debounce(() => localStorage.setItem(FILTERS_KEY, JSON.stringify(state)), 200);
   const loadFilters = () => {
     try{
-      const j = localStorage.getItem(FILTERS_KEY);
-      if(!j) return;
-      const s = JSON.parse(j);
-      if(typeof s.q==="string") state.q = s.q;
-      if(typeof s.cat==="string") state.cat = s.cat;
-      if(typeof s.radius==="number") state.radius = s.radius;
-      if(typeof s.sort==="string") state.sort = s.sort;
+      const s = JSON.parse(localStorage.getItem(FILTERS_KEY)||"null"); if(!s) return;
+      if(typeof s.q==="string") state.q=s.q;
+      if(typeof s.cat==="string") state.cat=s.cat;
+      if(typeof s.radius==="number") state.radius=s.radius;
+      if(typeof s.sort==="string") state.sort=s.sort;
     }catch{}
   };
 
@@ -64,66 +57,31 @@
   const radiusChips = $('#radiusChips');
   const sortChips = $('#sortChips');
   const geoBtn = $('#geoBtn');
-
   const toastBox = $('#toast') || (()=>{ const d=document.createElement('div'); d.id='toast'; document.body.appendChild(d); return d; })();
   const toast = (m) => { const el=document.createElement('div'); el.className='toast'; el.textContent=m; toastBox.appendChild(el); setTimeout(()=>el.remove(), 3200); };
 
   // ====== Category labels (RU)
-  const CATEGORY_LABELS = {
-    pizza: "Пицца", sushi: "Суши", burgers: "Бургеры", dessert: "Десерты",
-    coffee: "Кофе", bakery: "Выпечка", salad: "Салаты", grill: "Гриль", drinks: "Напитки"
-  };
-  const labelCat = (c) => {
-    if(!c) return "Другое";
-    const key = String(c).toLowerCase();
-    return CATEGORY_LABELS[key] || (key[0].toUpperCase()+key.slice(1));
-  };
+  const CATEGORY_LABELS = { pizza:"Пицца", sushi:"Суши", burgers:"Бургеры", dessert:"Десерты", coffee:"Кофе", bakery:"Выпечка", salad:"Салаты", grill:"Гриль", drinks:"Напитки" };
+  const labelCat = (c) => { if(!c) return "Другое"; const k=String(c).toLowerCase(); return CATEGORY_LABELS[k] || (k[0].toUpperCase()+k.slice(1)); };
 
   // ====== Build chips
   function buildChipsFromOffers(list){
-    // категории из фида
     const set = new Set(list.map(o => (o.category || o.cat || "").toString().toLowerCase()).filter(Boolean));
     const cats = ["all", ...Array.from(set).sort()];
     catsChips.innerHTML = cats.map(c => `<button class="chip${state.cat===c?' active':''}" data-cat="${c}">${c==='all'?'Все':labelCat(c)}</button>`).join("");
-    catsChips.onclick = (e) => {
-      const b = e.target.closest('.chip'); if(!b) return;
-      state.cat = b.dataset.cat;
-      [...catsChips.children].forEach(x=>x.classList.toggle('active', x.dataset.cat===state.cat));
-      saveFilters(); render();
-    };
+    catsChips.onclick = (e) => { const b=e.target.closest('.chip'); if(!b) return; state.cat=b.dataset.cat; [...catsChips.children].forEach(x=>x.classList.toggle('active', x.dataset.cat===state.cat)); saveFilters(); render(); };
 
-    // радиусы
-    const radii = [0,3,5,10,20]; // 0 = любое
+    const radii = [0,3,5,10,20];
     radiusChips.innerHTML = radii.map(r => `<button class="chip${state.radius===r?' active':''}" data-r="${r}">${r? r+' км':'Любое'}</button>`).join("");
-    radiusChips.onclick = (e) => {
-      const b=e.target.closest('.chip'); if(!b) return;
-      state.radius = Number(b.dataset.r)||0;
-      [...radiusChips.children].forEach(x=>x.classList.toggle('active', Number(x.dataset.r)===state.radius));
-      saveFilters(); render();
-    };
+    radiusChips.onclick = (e) => { const b=e.target.closest('.chip'); if(!b) return; state.radius=Number(b.dataset.r)||0; [...radiusChips.children].forEach(x=>x.classList.toggle('active', Number(x.dataset.r)===state.radius)); saveFilters(); render(); };
 
-    // сортировки
-    const sorts = [
-      ["expire","Скоро истекают"],
-      ["near","Ближе ко мне"],
-      ["discount","Больше скидка"],
-      ["cheap","Дешевле"],
-      ["expensive","Дороже"]
-    ];
+    const sorts = [["expire","Скоро истекают"],["near","Ближе ко мне"],["discount","Больше скидка"],["cheap","Дешевле"],["expensive","Дороже"]];
     sortChips.innerHTML = sorts.map(([k,t]) => `<button class="chip${state.sort===k?' active':''}" data-sort="${k}">${t}</button>`).join("");
-    sortChips.onclick = (e) => {
-      const b=e.target.closest('.chip'); if(!b) return;
-      state.sort = b.dataset.sort;
-      [...sortChips.children].forEach(x=>x.classList.toggle('active', x.dataset.sort===state.sort));
-      saveFilters(); render();
-    };
+    sortChips.onclick = (e) => { const b=e.target.closest('.chip'); if(!b) return; state.sort=b.dataset.sort; [...sortChips.children].forEach(x=>x.classList.toggle('active', x.dataset.sort===state.sort)); saveFilters(); render(); };
   }
 
   // ====== Fetch & render
-  function showSkeleton(n=8){
-    gridSkeleton.innerHTML=''; for(let i=0;i<n;i++){ const s=document.createElement('div'); s.className='card'; gridSkeleton.appendChild(s); }
-    gridSkeleton.classList.remove('hidden');
-  }
+  function showSkeleton(n=8){ gridSkeleton.innerHTML=''; for(let i=0;i<n;i++){ const s=document.createElement('div'); s.className='card'; gridSkeleton.appendChild(s); } gridSkeleton.classList.remove('hidden'); }
   function hideSkeleton(){ gridSkeleton.classList.add('hidden'); }
 
   async function loadBatch(){
@@ -136,12 +94,8 @@
       const payload = await res.json();
       const arr = Array.isArray(payload.items)? payload.items : (Array.isArray(payload)?payload:[]);
       total = typeof payload.total==='number'? payload.total : null;
-      offers = offers.concat(arr);
-      offset += arr.length;
-      if(offset===arr.length){ // первая подгрузка
-        buildChipsFromOffers(offers);
-        smartRadius(); // если есть гео — подберём радиус
-      }
+      offers = offers.concat(arr); offset += arr.length;
+      if(offset===arr.length){ buildChipsFromOffers(offers); smartRadius(); }
       render();
     }catch(e){ console.error(e); toast('Не удалось загрузить витрину'); }
     finally{ hideSkeleton(); loading=false; }
@@ -151,7 +105,7 @@
     const g = geo.get(); if(!g) return;
     const withDist = offers.map(o => ({o, d: distanceFor(o,g)})).filter(x=>x.d!=null).sort((a,b)=>a.d-b.d);
     const N = withDist.length;
-    if(N>=1 && state.radius===0){ // подставляем только если пользователь сам не выбирал радиус
+    if(N>=1 && state.radius===0){
       const p90 = withDist[Math.min(N-1, Math.floor(N*0.9))].d;
       state.radius = p90<=3 ? 3 : p90<=5 ? 5 : p90<=10 ? 10 : 20;
       [...radiusChips.children].forEach(x=>x.classList.toggle('active', Number(x.dataset.r)===state.radius));
@@ -176,27 +130,17 @@
       .filter(o => state.radius===0 || (o.__dist!=null && o.__dist<=state.radius))
       .filter(o => (o.qty_left??0)>0 && (!o.expires_at || new Date(o.expires_at).getTime()>Date.now()));
 
-    // сортировки
     const sort = state.sort;
     list.sort((a,b) => {
-      if(sort==='near'){
-        const ad=a.__dist??1e9, bd=b.__dist??1e9; return ad-bd;
-      }else if(sort==='discount'){
-        return (b.__disc||0) - (a.__disc||0);
-      }else if(sort==='cheap'){
-        return (a.price_cents||0) - (b.price_cents||0);
-      }else if(sort==='expensive'){
-        return (b.price_cents||0) - (a.price_cents||0);
-      }else{ // expire
-        return new Date(a.expires_at||0) - new Date(b.expires_at||0);
-      }
+      if(sort==='near'){ const ad=a.__dist??1e9, bd=b.__dist??1e9; return ad-bd; }
+      if(sort==='discount'){ return (b.__disc||0) - (a.__disc||0); }
+      if(sort==='cheap'){ return (a.price_cents||0) - (b.price_cents||0); }
+      if(sort==='expensive'){ return (b.price_cents||0) - (a.price_cents||0); }
+      return new Date(a.expires_at||0) - new Date(b.expires_at||0);
     });
 
     grid.innerHTML = '';
-    if(!list.length){
-      grid.innerHTML = `<div class="card"><div class="p">Ничего не найдено. Попробуйте изменить фильтры.</div></div>`;
-      return;
-    }
+    if(!list.length){ grid.innerHTML = `<div class="card"><div class="p">Ничего не найдено. Попробуйте изменить фильтры.</div></div>`; return; }
     list.forEach(o => {
       const el = document.createElement('div'); el.className='card';
       const disc = o.__disc, left = timeLeft(o.expires_at);
@@ -233,46 +177,86 @@
   }
   $('#sheetClose').onclick = () => setModal('#sheet', false);
 
-  $('#reserveBtn').onclick = async () => {
-    const o = currentOffer; if(!o) return;
+  // helper: извлечь код из любых форматов ответа
+  function extractReservationCode(data){
+    if(!data || typeof data!=='object') return "";
+    return (
+      data.code ||
+      data.reservation_code ||
+      data.qr_code ||
+      (data.reservation && (data.reservation.code || data.reservation.qr_code)) ||
+      (data.data && (data.data.code || data.data.qr_code)) ||
+      ""
+    );
+  }
+  function extractQrPayload(data){
+    if(!data || typeof data!=='object') return "";
+    return data.qr_url || data.url || extractReservationCode(data) || "";
+  }
+
+  // защита от двойных кликов
+  let reserveBusy = false;
+  $('#reserveBtn').onclick = async (ev) => {
+    ev?.preventDefault?.();
+    if(reserveBusy) return;
+    const btn = ev?.currentTarget || $('#reserveBtn');
+    const o = currentOffer;
+
+    // валидация ID
+    const offer_id = o && (o.id ?? o.offer_id);
+    if(!offer_id){ toast('Оффер не найден'); return; }
+
     try{
+      reserveBusy = true; if(btn) btn.disabled = true;
+
       const resp = await fetch(API + '/api/v1/public/reserve', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ offer_id: o.id || o.offer_id, name:'Гость', phone:'' })
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ offer_id, name:'Гость', phone:'' })
       });
-      const data = await resp.json().catch(()=>({}));
+
+      let data = {};
+      try { data = await resp.json(); } catch {}
+
       if(!resp.ok){
-        let msg = data?.detail || 'Не удалось забронировать';
-        if (data?.detail === 'offer expired') msg = 'Оффер истёк';
-        if (data?.detail === 'sold out') msg = 'Остаток закончился';
-        toast(msg); return;
+        const d = (data && (data.detail || data.error || data.message)) || '';
+        let msg = 'Не удалось забронировать';
+        if (/offer not found/i.test(d)) msg = 'Оффер не найден';
+        else if (/sold out/i.test(d)) msg = 'Остаток закончился';
+        else if (/expired/i.test(d)) msg = 'Оффер истёк';
+        toast(msg);
+        return; // важный return — дальше не идём
       }
+
+      // успех
       toast('Забронировано ✅');
       // локально уменьшим остаток
-      const it = offers.find(x => x.id===o.id || x.offer_id===o.offer_id);
-      if (it && typeof it.qty_left==='number') it.qty_left = Math.max(0, it.qty_left-1);
+      const it = offers.find(x => (x.id ?? x.offer_id) === offer_id);
+      if (it && typeof it.qty_left === 'number') it.qty_left = Math.max(0, it.qty_left - 1);
       render();
       setModal('#sheet', false);
 
-      const code = data.code || data.reservation_code || data.qr_code || (data.reservation && (data.reservation.code || data.reservation.qr_code));
-      const payload = data.qr_url || data.url || code || '';
-      showQR(payload || code || '');
-    }catch(e){ console.error(e); toast('Сеть недоступна'); }
+      const payload = extractQrPayload(data);
+      showQR(payload);
+    }catch(e){
+      console.error(e);
+      toast('Сеть недоступна');
+    }finally{
+      reserveBusy = false; if(btn) btn.disabled = false;
+    }
   };
 
   function showQR(text){
+    const t = (text||'').toString().trim();
+    $('#qrCodeText').textContent = t || '—';
     const canvas = $('#qrCanvas');
-    $('#qrCodeText').textContent = (text||'').trim() || '—';
-    try{ window.QRCode.toCanvas(canvas, String(text||'NO_CODE'), { width:220, margin:1 }, ()=>{}); }catch(e){}
+    try { window.QRCode.toCanvas(canvas, t || 'NO_CODE', { width:220, margin:1 }, ()=>{}); } catch {}
     setModal('#qrModal', true);
   }
   $('#qrClose').onclick = () => setModal('#qrModal', false);
-  $('#qrOk').onclick = () => setModal('#qrModal', false);
+  $('#qrOk').onclick   = () => setModal('#qrModal', false);
 
-  function setModal(sel, open){
-    const m = $(sel); if(!m) return;
-    m.setAttribute('aria-hidden', open? 'false':'true');
-  }
+  function setModal(sel, open){ const m=$(sel); if(!m) return; m.setAttribute('aria-hidden', open? 'false':'true'); }
 
   // ====== Geolocation
   geoBtn.onclick = async () => {
@@ -281,9 +265,8 @@
       const { latitude:lat, longitude:lng } = pos.coords;
       geo.set({lat, lng});
       toast('Геопозиция сохранена');
-      smartRadius();
-      render();
-    }catch(e){ toast('Не удалось получить геопозицию'); }
+      smartRadius(); render();
+    }catch{ toast('Не удалось получить геопозицию'); }
   };
 
   // ====== Events
