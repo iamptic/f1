@@ -1,7 +1,0 @@
-
-/* Fix: ensure actions visible; stabilize columns */
-#offerList .row { display:grid; grid-template-columns: minmax(140px,2fr) minmax(80px,.9fr) minmax(60px,.7fr) minmax(90px,1fr) minmax(160px,1fr) minmax(160px,1fr); gap: 8px; align-items:center; }
-#offerList .row .actions { display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; }
-#offerList .btn.btn-ghost { border:1px solid var(--border); background:transparent; }
-#offerList .skeleton { height: 52px; border-radius:12px; background: linear-gradient(90deg,#111319 25%,#1a1f28 37%,#111319 63%); animation: pulse 1.2s infinite ease-in-out; }
-@keyframes pulse{0%{background-position:-200px 0}100%{background-position:calc(200px + 100%) 0}}
