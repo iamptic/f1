@@ -1080,3 +1080,86 @@ function renderReservationsList(items){
     wrap.appendChild(tr);
   });
 }
+
+
+/* === Geolocation → Address autofill (registration & profile) === */
+(function(){
+  function ensureHiddenFields(targetId){
+    var el = document.getElementById(targetId);
+    if(!el) return null;
+    var form = el.closest('form') || document;
+    var lat = form.querySelector('input[name="lat"]') || document.createElement('input');
+    var lng = form.querySelector('input[name="lng"]') || document.createElement('input');
+    if(!lat.getAttribute('name')){ lat.type='hidden'; lat.name='lat'; form.appendChild(lat); }
+    if(!lng.getAttribute('name')){ lng.type='hidden'; lng.name='lng'; form.appendChild(lng); }
+    return {lat,lng,form,el};
+  }
+  function setAddress(targetId, text, lat, lng){
+    var els = ensureHiddenFields(targetId);
+    if(!els) return;
+    els.el.value = text || '';
+    els.lat.value = lat!=null? String(lat):'';
+    els.lng.value = lng!=null? String(lng):'';
+  }
+  function composeAddress(obj){
+    if(!obj) return '';
+    var a = obj.address||{};
+    var parts = [];
+    if(a.road) parts.push(a.road);
+    if(a.house_number) parts.push(a.house_number);
+    var street = parts.join(' ').trim();
+    var city = a.city || a.town || a.village || a.municipality || '';
+    var state = a.state || '';
+    var country = a.country || '';
+    var result = [street, city, state, country].filter(Boolean).join(', ');
+    return result || obj.display_name || '';
+  }
+  async function reverseGeocode(lat, lng){
+    try{
+      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&accept-language=ru`;
+      const res = await fetch(url, { headers: { 'Accept':'application/json' } });
+      if(!res.ok) throw new Error('geocode');
+      const data = await res.json();
+      return data;
+    }catch(e){ return null; }
+  }
+  async function geoTo(targetId){
+    var status = document.getElementById('geo_status');
+    if(status){ status.textContent = 'Определяем местоположение…'; }
+    if(!('geolocation' in navigator)){
+      if(status){ status.textContent = 'Геолокация не поддерживается'; }
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(async (pos)=>{
+      const lat = pos.coords.latitude, lng = pos.coords.longitude;
+      if(status){ status.textContent = 'Ищем адрес…'; }
+      const info = await reverseGeocode(lat, lng);
+      const text = composeAddress(info);
+      setAddress(targetId, text, lat, lng);
+      if(status){ status.textContent = 'Адрес подставлен — проверьте и при необходимости исправьте.'; }
+    }, (err)=>{
+      if(status){ status.textContent = 'Не удалось получить геолокацию'; }
+    }, { enableHighAccuracy:true, timeout: 10000 });
+  }
+  function onClick(e){
+    var b = e.target.closest('.geoloc-btn');
+    if(!b) return;
+    var targetId = b.getAttribute('data-target') || 'address';
+    geoTo(targetId);
+  }
+  document.addEventListener('click', onClick);
+  // Auto-suggest on registration open: try once
+  window.foodySuggestGeoOnce = window.foodySuggestGeoOnce || false;
+  function maybeSuggest(){
+    if(window.foodySuggestGeoOnce) return;
+    window.foodySuggestGeoOnce = true;
+    var regAddr = document.getElementById('reg_address');
+    if(regAddr && !regAddr.value){
+      // non-intrusive: show a small hint
+      var hint = document.getElementById('geo_status');
+      if(!hint){ hint = document.createElement('div'); hint.id='geo_status'; hint.className='muted'; regAddr.parentElement.appendChild(hint); }
+      hint.textContent = 'Можно автоматически подставить адрес — нажмите «Определить гео»';
+    }
+  }
+  document.addEventListener('DOMContentLoaded', maybeSuggest);
+})();

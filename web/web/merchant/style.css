@@ -429,3 +429,5 @@ section#profile .card form :is(button[type="submit"], .actions button[type="subm
 #cityModal{display:grid;place-items:center}#cityModal .modal-dialog{margin:0 auto}
 
 #qrModal{display:grid;place-items:center}#qrModal .modal-dialog{margin:0 auto}
+
+.btn.small{padding:6px 8px;font-size:12px;border-radius:10px}
