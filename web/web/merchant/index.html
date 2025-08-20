@@ -17,27 +17,7 @@
   <script>window.foodyApi = (window.__FOODY__ && window.__FOODY__.FOODY_API) || window.foodyApi || 'https://foodyback-production.up.railway.app';</script>
   <script defer src="/config.js"></script>
 <script defer src="./app.js?v=no247-9"></script>
-  <style>
-    #cityModal[aria-hidden="true"] { display: none; }
-    #cityModal[aria-hidden="false"] { display: flex; }
-    #cityModal {
-      position: fixed; inset: 0; z-index: 50;
-      display: none; align-items: center; justify-content: center; /* center */
-    }
-    #cityModal .modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.55); backdrop-filter: blur(2px); }
-    #cityModal .modal-dialog {
-      position: relative; width: min(520px, 92vw);
-      max-height: 90vh; overflow: auto;
-      background: var(--card, #151a21); color: var(--text, #e8edf2);
-      border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.4);
-      border: 1px solid var(--border, rgba(255,255,255,.12));
-    }
-    #cityModal .modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 18px; font-weight:600; border-bottom: 1px solid rgba(255,255,255,.08); }
-    #cityModal .modal-body { padding: 14px 16px 16px; }
-    #cityModal .close { background: transparent; border:none; font-size:20px; line-height:1; color: inherit; cursor: pointer; opacity:.8; }
-    #cityModal .close:hover { opacity:1; }
-
-    .city-search { width: 100%; padding: 10px 12px; border-radius: 10px; border:1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); color: inherit; outline: none; }
+  <style>.city-search { width: 100%; padding: 10px 12px; border-radius: 10px; border:1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); color: inherit; outline: none; }
     .city-search::placeholder { opacity:.6; }
 
     .city-grid { margin-top: 12px; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
@@ -77,7 +57,24 @@
     .hidden { display: none; }
     .muted.small { opacity:.7; font-size:12px; }
     .ok-badge { color:#00C27A; font-weight:600; font-size: 13px; }
-  </style>
+#cityModal[aria-hidden="true"] { display: none; }
+#cityModal[aria-hidden="false"] { display: grid; }
+#cityModal {
+  position: fixed; inset: 0; z-index: 60;
+  display: none;
+  place-items: center;
+}
+#cityModal .modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.55); backdrop-filter: blur(2px); }
+#cityModal .modal-dialog {
+  position: relative; z-index: 1;
+  width: min(520px, 92vw);
+  max-height: 90vh; overflow: auto;
+  margin: 0;
+  background: var(--card, #151a21); color: var(--text, #e8edf2);
+  border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.4);
+  border: 1px solid var(--border, #242b35);
+}
+</style>
 <link href="./foody.pw.css" rel="stylesheet">
 <link href="./offers_actions.css" rel="stylesheet">
 

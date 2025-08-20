@@ -440,3 +440,7 @@ section#profile .card form :is(button[type="submit"], .actions button[type="subm
   background: var(--card); border: 1px solid var(--border);
   border-radius: 16px; box-shadow: var(--shadow);
 }
+
+/* Fallback centering for city modal */
+#cityModal{place-items:center;}
+#cityModal .modal-dialog{margin:0;}
