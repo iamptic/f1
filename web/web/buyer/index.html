@@ -4,107 +4,106 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Foody · Витрина</title>
-  <link rel="stylesheet" href="./style.css" />
-  <script defer src="/config.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-  <script defer src="./app.js"></script>
+  <link rel="stylesheet" href="./style.css?v=vitrine-p1" />
+  <script>
+    // PROD API (можно переопределить через window.__FOODY__.FOODY_API)
+    window.foodyApi = (window.__FOODY__ && window.__FOODY__.FOODY_API) || 'https://foodyback-production.up.railway.app';
+  </script>
 </head>
 <body>
-  <header class="appbar">
-    <div class="left">
-      <div class="logo">F</div>
-      <div class="tit">
-        <div class="t">Foody</div>
-        <div class="s">Скидки перед закрытием</div>
+  <header class="site-header">
+    <div class="wrap">
+      <div class="brand">🍽️ Foody</div>
+      <div class="tools">
+        <select id="category" class="nice-select">
+          <option value="">Все категории</option>
+          <option value="ready_meal">Готовые блюда</option>
+          <option value="bakery">Выпечка</option>
+          <option value="sushi">Суши/роллы</option>
+          <option value="salad">Салаты</option>
+          <option value="dessert">Десерты</option>
+          <option value="other">Другое</option>
+        </select>
+        <select id="sort" class="nice-select">
+          <option value="soon">По сроку (раньше истекают)</option>
+          <option value="discount">По скидке (больше → выше)</option>
+          <option value="price_asc">Цена (дешевле → выше)</option>
+          <option value="price_desc">Цена (дороже → выше)</option>
+        </select>
       </div>
-    </div>
-    <div class="right">
-      <button id="geoBtn" class="btn small" title="Определить геопозицию">Моя гео</button>
     </div>
   </header>
 
-  <!-- sticky‑панель фильтров -->
-  <div class="filters sticky">
-    <div class="row">
-      <input id="search" class="search" placeholder="Поиск по названию…" />
+  <main class="wrap">
+    <div id="offers" class="offer-grid">
+      <div class="skeleton"></div>
+      <div class="skeleton"></div>
+      <div class="skeleton"></div>
     </div>
-
-    <!-- категории — горизонтальные чипы со скроллом -->
-    <div class="row">
-      <div class="chips scroll" id="catsChips"></div>
-    </div>
-
-    <!-- радиус и сортировки — две независимые горизонтальные ленты -->
-    <div class="row two-lanes">
-      <div class="chips scroll" id="radiusChips"></div>
-      <div class="chips scroll" id="sortChips"></div>
-    </div>
-  </div>
-
-  <main class="content">
-    <div id="grid" class="grid"></div>
-    <div id="gridSkeleton" class="grid skeleton hidden"></div>
   </main>
 
-  <!-- Шторка детали оффера -->
-  <div id="sheet" class="modal" aria-hidden="true">
-    <div class="modal-backdrop"></div>
-    <div class="modal-dialog">
-      <div class="modal-h">
-        <div id="sTitle" class="modal-title">—</div>
-        <button id="sheetClose" class="x" aria-label="Закрыть">×</button>
-      </div>
-      <div class="modal-b">
-        <img id="sImg" alt="">
-        <div class="meta">
-          <div class="row">
-            <div id="sPrice" class="price">—</div>
-            <div id="sOld" class="old">—</div>
-          </div>
-          <div class="row"><div id="sQty" class="qty">—</div></div>
-          <div class="row"><div id="sExp" class="exp">—</div> <div id="sLeft" class="muted">—</div></div>
+  <!-- Модалка оффера -->
+  <div id="offerModal" class="modal" aria-hidden="true">
+    <div class="modal-dim" data-close></div>
+    <div class="modal-card">
+      <button class="modal-close" data-close aria-label="Закрыть">×</button>
+      <div class="offer-modal__img" id="m_img"></div>
+      <div class="offer-modal__body">
+        <h3 id="m_title" class="offer-modal__title"></h3>
+        <div id="m_desc" class="offer-modal__desc"></div>
+
+        <div class="price">
+          <span id="m_price_now" class="now">—</span>
+          <span id="m_price_old" class="old" style="display:none">—</span>
+          <span id="m_badge" class="badge" style="display:none"></span>
         </div>
 
         <div class="contact">
-          <div id="sAddr">Адрес не указан</div>
-          <div id="sPhone">Телефон не указан</div>
-        </div>
-
-        <div id="sDesc" class="desc">—</div>
-
-        <div class="actions">
-          <div class="qty-ctrl">
-            <button id="qtyDec" class="btn icon" aria-label="Уменьшить">−</button>
-            <input id="qtyInput" type="number" min="1" value="1" inputmode="numeric" />
-            <button id="qtyInc" class="btn icon" aria-label="Увеличить">+</button>
+          <div class="contact-row">
+            <span class="lbl">Адрес</span>
+            <span id="m_addr" class="val">—</span>
           </div>
-          <button id="reserveBtn" class="btn primary">Забронировать</button>
+          <div class="contact-row">
+            <span class="lbl">Телефон</span>
+            <a id="m_phone" class="val" href="#">—</a>
+          </div>
+          <div class="contact-row" id="m_until_wrap">
+            <span class="lbl">Действует до</span>
+            <span id="m_until" class="val">—</span>
+          </div>
         </div>
-      </div>
-    </div>
-  </div>
 
-  <!-- Модалка QR -->
-  <div id="qrModal" class="modal" aria-hidden="true">
-    <div class="modal-backdrop"></div>
-    <div class="modal-dialog">
-      <div class="modal-h">
-        <div class="modal-title">Бронь оформлена</div>
-        <button id="qrClose" class="x" aria-label="Закрыть">×</button>
-      </div>
-      <div class="modal-b">
-        <div class="qr-wrap"><canvas id="qrCanvas" width="220" height="220"></canvas></div>
-        <div class="qr-info">
-          <div class="qr-code-line">Код для погашения: <strong id="qrCodeText">—</strong></div>
-          <div id="qrHint" class="muted">Покажите этот код или QR сотруднику ресторана.</div>
+        <div class="reserve">
+          <label class="qty">
+            <span>Количество</span>
+            <div class="qtybox">
+              <button type="button" class="qbtn" data-qty="-1">–</button>
+              <input id="m_qty" type="number" min="1" step="1" value="1" />
+              <button type="button" class="qbtn" data-qty="+1">+</button>
+            </div>
+            <span class="qty-left" id="m_left"></span>
+          </label>
+          <label>Ваш телефон
+            <input id="m_user_phone" type="tel" placeholder="+7 900 000 00 00" inputmode="tel" autocomplete="tel">
+          </label>
+          <button id="m_reserve" class="btn btn-primary">Забронировать</button>
+          <div id="m_err" class="form-error" style="display:none"></div>
         </div>
-        <div class="actions">
-          <button id="qrOk" class="btn primary">Готово</button>
+
+        <div id="qr_wrap" class="qr" style="display:none">
+          <div class="qr-title">Ваш QR-код брони</div>
+          <canvas id="qr_canvas" width="240" height="240"></canvas>
+          <div class="qr-code" id="qr_code_text"></div>
+          <div class="qr-hint">Покажите QR на кассе. Код действителен до указанного времени оффера.</div>
         </div>
       </div>
     </div>
   </div>
 
   <div id="toast"></div>
+
+  <!-- QR генератор (надежный) -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" defer></script>
+  <script src="./app.js?v=vit-r1" defer></script>
 </body>
 </html>
