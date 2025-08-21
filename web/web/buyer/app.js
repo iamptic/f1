@@ -1,3 +1,4 @@
+// buyer/app.js — vitrine fix: QR ready + readable errors + addr/phone mapping
 (() => {
   const $ = (s, r=document) => r.querySelector(s);
   const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
@@ -18,18 +19,27 @@
     try { return new Date(x).toLocaleString('ru-RU', { dateStyle:'short', timeStyle:'short' }); }
     catch(_) { return '—'; }
   };
-  const getAddr = (o) => (o.restaurant_address || o.address || o.merchant_address || o.merchant?.address || o.restaurant?.address || '').trim();
-  const getPhoneRaw = (o) => (o.restaurant_phone || o.phone || o.merchant_phone || o.merchant?.phone || o.restaurant?.phone || o.contact_phone || '').toString().trim();
+
+  // Более агрессивный маппинг адреса/телефона (и вложенных объектов)
+  const getAddr = (o) => (
+    (o.restaurant_address || o.address || o.merchant_address || o.vendor_address ||
+     o?.merchant?.address || o?.restaurant?.address || o?.vendor?.address || '') + ''
+  ).trim();
+
+  const getPhoneRaw = (o) => (
+    (o.restaurant_phone || o.merchant_phone || o.vendor_phone || o.phone || o.contact_phone ||
+     o?.merchant?.phone || o?.restaurant?.phone || o?.vendor?.phone || '') + ''
+  ).trim();
+
   const telLink = (p) => {
-    const d = p.replace(/[^\d+]/g,'');
+    const d = (p||'').replace(/[^\d+]/g,'');
     if (!d) return '#';
     return d.startsWith('+') ? `tel:${d}` : `tel:+${d}`;
   };
-  const numOr = (v, def=0) => (isFinite(+v) ? +v : def);
+  const numOr = (v, def=1) => { const n = parseInt(String(v||'').trim(), 10); return isFinite(n)&&n>0 ? n : def; };
 
   // ---- State
   let __offers = [];
-  let __cat = '';
 
   // ---- Fetch & render
   async function getOffers(){
@@ -107,7 +117,6 @@
   function applyFilters(){
     const sort = $('#sort')?.value || 'soon';
     let arr = [...__offers];
-    if (__cat) arr = arr.filter(o => (o.category || o.cat || 'other') === __cat);
 
     const priceOf = o => (o.price_cents!=null ? o.price_cents/100 : (o.price ?? 0));
     const oldOf   = o => (o.original_price_cents!=null ? o.original_price_cents/100 : (o.original_price ?? 0));
@@ -129,8 +138,10 @@
   // ---- Modal + Reserve
   const modal = $('#offerModal');
   function openModal(o){
+    // image
     const img = o.image_url || o.photo_url || '';
     $('#m_img').innerHTML = img ? `<img src="${img}" alt="">` : `<div class="ph" style="height:100%;display:grid;place-items:center;font-size:48px">🍱</div>`;
+    // text
     $('#m_title').textContent = o.title || o.name || 'Без названия';
     const desc = (o.description || o.desc || '').trim();
     $('#m_desc').textContent = desc || '';
@@ -183,16 +194,9 @@
       const next = Math.max(1, cur + (dir === '+1' ? 1 : -1));
       inp.value = next;
     }
-
-    const chip = e.target.closest('#catChips .chip');
-    if (chip){
-      __cat = chip.dataset.cat || '';
-      $$('#catChips .chip').forEach(c => c.classList.toggle('active', c===chip));
-      applyFilters();
-    }
   });
 
-  // Phone mask (простая)
+  // Phone mask
   function formatRuPhone(d){
     if (!d) return '+7 ';
     if (d[0]==='8') d='7'+d.slice(1);
@@ -213,6 +217,21 @@
     phoneInput.addEventListener('input',h); phoneInput.addEventListener('blur',h); h();
   }
 
+  // Ждём QR-библиотеку (defer может ещё грузиться к моменту клика)
+  function ensureQRReady(timeoutMs=3000){
+    return new Promise((resolve, reject)=>{
+      if (window.QRCode && typeof window.QRCode.toCanvas === 'function') return resolve();
+      const start = Date.now();
+      const t = setInterval(()=>{
+        if (window.QRCode && typeof window.QRCode.toCanvas === 'function'){
+          clearInterval(t); resolve();
+        } else if (Date.now()-start > timeoutMs){
+          clearInterval(t); reject(new Error('QR library not ready'));
+        }
+      }, 50);
+    });
+  }
+
   // Reserve → QR
   async function reserve(){
     const id = modal.dataset.offerId;
@@ -228,25 +247,21 @@
       return;
     }
 
-    const basePayload = { offer_id: id, qty, phone: phoneDigits };
-    const altPayloads = [
-      basePayload,
+    const payloads = [
+      { offer_id: id, qty, phone: phoneDigits },
       { offerId: id, qty, phone: phoneDigits },
-      { offer_id: id, quantity: qty, phone: phoneDigits },
       { id, qty, phone: phoneDigits }
     ];
-
     const endpoints = [
       '/api/v1/public/reservations',
       '/api/v1/reservations/public',
       '/api/v1/reservations',
-      `/api/v1/public/offers/${encodeURIComponent(id)}/reserve`,
-      '/api/v1/public/reserve'  // ваш основной
+      '/api/v1/public/reserve' // ваш основной
     ];
 
     let data=null, lastErr=null;
     outer: for (const p of endpoints){
-      for (const payload of altPayloads){
+      for (const payload of payloads){
         try{
           const r = await fetch(API + p, {
             method:'POST',
@@ -255,18 +270,15 @@
           });
           const ct = r.headers.get('content-type')||'';
           const j = ct.includes('application/json') ? await r.json() : await r.text();
-          if (!r.ok) {
-            const msg = (j && (j.detail||j.message)) || (r.status+' '+r.statusText);
-            throw new Error(msg);
-          }
+          if (!r.ok) throw new Error((j && (j.detail||j.message)) || (r.status+' '+r.statusText));
           data = j; break outer;
         }catch(e){ lastErr=e; }
       }
     }
 
     if (!data){
-      const msg = String(lastErr?.message || 'Не удалось создать бронь');
-      err.textContent = /not\s*found/i.test(msg) ? 'Оффер не найден или истёк. Обновите страницу.' : msg;
+      const msg = lastErr?.message || String(lastErr) || 'Не удалось создать бронь';
+      err.textContent = msg;
       err.style.display='block';
       return;
     }
@@ -277,7 +289,21 @@
       err.style.display='block';
       return;
     }
-    drawQR(code);
+
+    try {
+      await ensureQRReady();
+      drawQR(code);
+    } catch(qe) {
+      // библиотека не успела – покажем понятный текст, но не валимся
+      const canvas = $('#qr_canvas');
+      if (canvas){
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle = '#000'; ctx.font = '14px monospace';
+        ctx.fillText('Не удалось отрисовать QR', 16, 120);
+      }
+    }
+
     $('#qr_code_text').textContent = code;
     $('#qr_wrap').style.display = '';
     toast('Бронь создана. Показан QR-код.');
@@ -291,7 +317,7 @@
     if (!canvas) return;
 
     try {
-      const ctx = canvas.getContext('2d', { willReadFrequently:false, desynchronized:true });
+      const ctx = canvas.getContext('2d');
       ctx.save();
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -329,7 +355,8 @@
       __offers = await getOffers();
       applyFilters();
     } catch(e) {
-      $('#offers').innerHTML = `<div class="card" style="padding:16px">Ошибка загрузки: ${(e.message||e)}</div>`;
+      const msg = e?.message || String(e);
+      $('#offers').innerHTML = `<div class="card" style="padding:16px">Ошибка загрузки: ${msg}</div>`;
     }
   }
 
