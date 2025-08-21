@@ -73,12 +73,10 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--text);
 #toast{position:fixed;right:12px;bottom:16px;display:grid;gap:8px;z-index:80}
 .toast{background:#0f141c;border:1px solid var(--brd);border-left:6px solid var(--accent2);padding:10px 12px;border-radius:12px}
 
-
-/* === Foody buyer header layout fix (keep 'Моя гео' in place) === */
+/* === Fix: заголовок/логотип + кнопка «Моя гео» не уезжает === */
 .appbar{flex-wrap:nowrap}
 .appbar .left{flex:1 1 auto; min-width:0}
 .appbar .tit{min-width:0; overflow:hidden}
 .appbar .tit .t, .appbar .tit .s{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%}
 .appbar .right{flex:0 0 auto; white-space:nowrap}
-/* ensure the geo button won't shrink awkwardly */
 #geoBtn{flex:0 0 auto}
