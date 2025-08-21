@@ -225,122 +225,67 @@
     phoneInput.addEventListener('input',h); phoneInput.addEventListener('blur',h); h();
   }
 
-  // ---- QR: рисуем только когда блок уже показан
-  function drawQR(text){
-    const canvas = document.getElementById('qr_canvas');
-    if (!canvas) return;
+function drawQR(text){
+  const code = String(text || '');
+  const wrap = document.getElementById('qr_wrap');
+  const canvas = document.getElementById('qr_canvas');
 
-    // белая подложка (без «черного квадрата»)
-    try {
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(0,0,canvas.width,canvas.height);
-    } catch(_){}
+  // 1) Готовим <img> перед канвасом (если его ещё нет)
+  let img = document.getElementById('qr_img');
+  if (!img) {
+    img = document.createElement('img');
+    img.id = 'qr_img';
+    img.width = 240;
+    img.height = 240;
+    img.alt = 'QR';
+    img.style.display = 'none';
+    if (canvas && canvas.parentNode) {
+      canvas.parentNode.insertBefore(img, canvas); // не меняем макет
+    }
+  }
 
-    const fallback = () => {
+  // 2) Пробуем серверный PNG
+  const url = API + '/api/v1/public/qr/' + encodeURIComponent(code) + '.png';
+  const test = new Image();
+  test.decoding = 'async';
+  test.onload = () => {
+    img.src = test.src;
+    img.style.display = '';
+    if (canvas) canvas.style.display = 'none';
+  };
+  test.onerror = () => {
+    // 3) Фолбэк: старый клиентский рендер в canvas
+    if (canvas) {
+      canvas.style.display = '';
       try {
         const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#000';
-        ctx.font = '14px monospace';
-        ctx.fillText('QR недоступен', 70, 120);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0,0,canvas.width,canvas.height);
       } catch(_){}
-    };
-
-    let tries = 0;
-    (function waitAndDraw(){
       if (window.QRCode && typeof window.QRCode.toCanvas === 'function') {
-        try {
-          window.QRCode.toCanvas(
-            canvas,
-            String(text),
-            { errorCorrectionLevel:'M', margin:2, scale:6, color:{ dark:'#000000', light:'#ffffff' } },
-            (err)=>{ if (err) fallback(); }
-          );
-        } catch(_) { fallback(); }
-        return;
-      }
-      if (++tries <= 30) return setTimeout(waitAndDraw, 50); // ждём либу до ~1.5с
-      fallback();
-    })();
-  }
-
-  // Reserve → QR
-  async function reserve(){
-    const id = modal.dataset.offerId;
-    if (!id) return;
-
-    const qty = Math.max(1, parseInt($('#m_qty')?.value || '1',10));
-    const phoneDigits = ( $('#m_user_phone')?.value || '' ).replace(/\D+/g,'');
-    const err = $('#m_err');
-    if (err) err.style.display='none';
-
-    if (phoneDigits.length < 11){
-      if (err){ err.textContent = 'Введите телефон в формате +7 900 000 00 00'; err.style.display='block'; }
-      return;
-    }
-
-    const payloads = [
-      { offer_id: id, qty, phone: phoneDigits },
-      { offerId: id, qty, phone: phoneDigits },
-      { id, qty, phone: phoneDigits }
-    ];
-    const endpoints = [
-      '/api/v1/public/reservations',
-      '/api/v1/reservations/public',
-      '/api/v1/reservations',
-      '/api/v1/public/reserve'
-    ];
-
-    let data=null, lastErr=null;
-    outer: for (const p of endpoints){
-      for (const payload of payloads){
+        window.QRCode.toCanvas(
+          canvas,
+          code,
+          { errorCorrectionLevel:'M', margin:2, scale:6, color:{dark:'#000', light:'#fff'} },
+          (err)=>{
+            if (err) {
+              try{
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#000'; ctx.font = '14px monospace';
+                ctx.fillText('QR недоступен', 70, 120);
+              }catch(_){}
+            }
+          }
+        );
+      } else {
         try{
-          const r = await fetch(API + p, {
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify(payload)
-          });
-          const ct = r.headers.get('content-type')||'';
-          const j = ct.includes('application/json') ? await r.json() : await r.text();
-          if (!r.ok) throw new Error((j && (j.detail||j.message)) || (r.status+' '+r.statusText));
-          data = j; break outer;
-        }catch(e){ lastErr=e; }
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#000'; ctx.font = '14px monospace';
+          ctx.fillText('QR недоступен', 70, 120);
+        }catch(_){}
       }
     }
-
-    if (!data){
-      const msg = lastErr?.message || String(lastErr) || 'Не удалось создать бронь';
-      if (err){ err.textContent = /not\s*found/i.test(msg) ? 'Оффер не найден или истёк. Обновите страницу.' : msg; err.style.display='block'; }
-      return;
-    }
-
-    const code = data.code || data.reservation_code || data.id || data.qr || '';
-    if (!code){
-      if (err){ err.textContent = 'Сервер не вернул код брони'; err.style.display='block'; }
-      return;
-    }
-
-    // Показать блок заранее → дождаться layout → рисовать
-    if ($('#qr_code_text')) $('#qr_code_text').textContent = code;
-    if ($('#qr_wrap')) { $('#qr_wrap').style.display = ''; await new Promise(requestAnimationFrame); }
-    drawQR(code);
-  }
-
-  $('#m_reserve')?.addEventListener('click', reserve);
-
-  // ---- Init
-  async function init(){
-    try {
-      __offers = await getOffers();
-      applyFilters(); // сразу прогоним через фильтр (вдруг выбран не "Все")
-    } catch(e) {
-      const host = $('#offers');
-      if (host) host.innerHTML = `<div class="card" style="padding:16px">Ошибка загрузки: ${(e?.message||e)}</div>`;
-    }
-  }
-
-  document.addEventListener('keydown', (e)=>{ if (e.key==='Escape') closeModal(); });
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
-})();
+  };
+  // cache-buster, чтобы не залипало
+  test.src = url + '?t=' + Date.now();
+}
