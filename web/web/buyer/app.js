@@ -277,65 +277,56 @@
       err.style.display='block';
       return;
     }
-    drawQR(code);
-    $('#qr_code_text').textContent = code;
-    $('#qr_wrap').style.display = '';
-    toast('Бронь создана. Показан QR-код.');
-  }
+$('#qr_code_text').textContent = code;
+$('#qr_wrap').style.display = '';
+await new Promise(requestAnimationFrame); // даём layout произойти
+drawQR(code);
+toast('Бронь создана. Показан QR-код.');
+
 
   $('#m_reserve')?.addEventListener('click', reserve);
 
   // Надежная отрисовка QR (белая подложка + fallback)
   function drawQR(text){
-    const canvas = $('#qr_canvas');
-    if (!canvas) return;
+  const canvas = document.getElementById('qr_canvas');
+  if (!canvas) return;
 
+  // белая подложка (чтобы не было «черного квадрата»)
+  try {
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  } catch(_) {}
+
+  const fallback = () => {
     try {
-      const ctx = canvas.getContext('2d', { willReadFrequently:false, desynchronized:true });
-      ctx.save();
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0,0,canvas.width,canvas.height);
-      ctx.restore();
-    } catch(_){}
-
-    if (window.QRCode && typeof window.QRCode.toCanvas === 'function'){
-      window.QRCode.toCanvas(canvas, String(text), {
-        errorCorrectionLevel:'M',
-        margin: 2,
-        scale: 6,
-        color: { dark:'#000000', light:'#ffffff' }
-      }, (err)=>{
-        if (err) {
-          try {
-            const url = canvas.toDataURL('image/png');
-            const img = new Image();
-            img.src = url;
-            const wrap = canvas.parentElement;
-            if (wrap) { wrap.replaceChild(img, canvas); img.width=240; img.height=240; }
-          } catch(_){}
-        }
-      });
-    } else {
       const ctx = canvas.getContext('2d');
       ctx.fillStyle = '#000';
       ctx.font = '14px monospace';
-      ctx.fillText('QR недоступен', 50, 120);
-    }
-  }
+      ctx.fillText('QR недоступен', 70, 120);
+    } catch(_) {}
+  };
 
-  // Init
-  async function init(){
-    try {
-      __offers = await getOffers();
-      applyFilters();
-    } catch(e) {
-      $('#offers').innerHTML = `<div class="card" style="padding:16px">Ошибка загрузки: ${(e.message||e)}</div>`;
+  // подождём библиотеку до ~1.5с (30 * 50мс)
+  let tries = 0;
+  (function waitAndDraw(){
+    if (window.QRCode && typeof window.QRCode.toCanvas === 'function') {
+      try {
+        window.QRCode.toCanvas(
+          canvas,
+          String(text),
+          { errorCorrectionLevel:'M', margin:2, scale:6, color:{ dark:'#000000', light:'#ffffff' } },
+          (err) => { if (err) fallback(); }
+        );
+      } catch(_) { fallback(); }
+      return;
     }
-  }
+    if (++tries <= 30) return setTimeout(waitAndDraw, 50);
+    // не дождались — покажем понятный текст
+    fallback();
+  })();
+}
 
-  document.addEventListener('change', (e)=>{
-    if (e.target.id === 'sort') applyFilters();
-  });
   document.addEventListener('keydown', (e)=>{ if (e.key==='Escape') closeModal(); });
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
