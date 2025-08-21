@@ -1,3 +1,4 @@
+// buyer/app.js — vitrine patch r2 (address/phone mapping + robust reservation)
 (() => {
   const $ = (s, r=document) => r.querySelector(s);
   const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
@@ -18,14 +19,30 @@
     try { return new Date(x).toLocaleString('ru-RU', { dateStyle:'short', timeStyle:'short' }); }
     catch(_) { return '—'; }
   };
-  const getAddr = (o) => (o.restaurant_address || o.address || o.merchant_address || o.merchant?.address || '').trim();
-  const getPhoneRaw = (o) => (o.restaurant_phone || o.phone || o.merchant_phone || o.merchant?.phone || '').toString().trim();
+
+  // ---- Address / phone resolvers (расширенные)
+  function getAddr(o){
+    // top-level
+    const top = (o.restaurant_address || o.address || o.merchant_address || o.vendor_address || '').trim();
+    if (top) return top;
+    // nested
+    const r = o.restaurant || o.merchant || o.vendor || o.place || o.shop || {};
+    return (r.address || r.addr || r.location || '').trim();
+  }
+  function getPhoneRaw(o){
+    // top-level
+    const top = (o.restaurant_phone || o.merchant_phone || o.vendor_phone || o.phone || o.contact_phone || '').toString().trim();
+    if (top) return top;
+    // nested
+    const r = o.restaurant || o.merchant || o.vendor || o.place || o.shop || {};
+    return (r.phone || r.contact_phone || r.tel || '').toString().trim();
+  }
   const telLink = (p) => {
-    const d = p.replace(/[^\d+]/g,'');
+    const d = (p||'').replace(/[^\d+]/g,'');
     if (!d) return '#';
     return d.startsWith('+') ? `tel:${d}` : `tel:+${d}`;
   };
-  const numOr = (v, def=0) => (isFinite(+v) ? +v : def);
+  const numOr = (v, def=1) => { const n = parseInt(String(v||'').trim(), 10); return isFinite(n)&&n>0 ? n : def; };
 
   // ---- State
   let __offers = [];
@@ -109,7 +126,6 @@
     let arr = [...__offers];
     if (cat) arr = arr.filter(o => (o.category || o.cat || 'other') === cat);
 
-    // materialize numbers
     const priceOf = o => (o.price_cents!=null ? o.price_cents/100 : (o.price ?? 0));
     const oldOf   = o => (o.original_price_cents!=null ? o.original_price_cents/100 : (o.original_price ?? 0));
     const pctOf   = o => discount(oldOf(o), priceOf(o));
@@ -188,7 +204,7 @@
     }
   });
 
-  // Phone mask (простая)
+  // Phone mask
   function formatRuPhone(d){
     if (!d) return '+7 ';
     if (d[0]==='8') d='7'+d.slice(1);
@@ -209,7 +225,7 @@
     phoneInput.addEventListener('input',h); phoneInput.addEventListener('blur',h); h();
   }
 
-  // Reserve → QR
+  // Reserve → QR (расширенные эндпоинты + алиасы)
   async function reserve(){
     const id = modal.dataset.offerId;
     if (!id) return;
@@ -224,28 +240,46 @@
       return;
     }
 
-    const payload = { offer_id: id, qty, phone: phoneDigits };
+    const basePayload = { offer_id: id, qty, phone: phoneDigits };
+    const altPayloads = [
+      basePayload,
+      { offerId: id, qty, phone: phoneDigits },
+      { offer_id: id, quantity: qty, phone: phoneDigits },
+      { id, qty, phone: phoneDigits }
+    ];
+
     const endpoints = [
       '/api/v1/public/reservations',
       '/api/v1/reservations/public',
-      '/api/v1/reservations'
+      '/api/v1/reservations',
+      `/api/v1/public/offers/${encodeURIComponent(id)}/reserve`,
+      '/api/v1/public/reservations/create',
+      '/api/v1/public/booking'
     ];
+
     let data=null, lastErr=null;
-    for (const p of endpoints){
-      try{
-        const r = await fetch(API + p, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify(payload)
-        });
-        const ct = r.headers.get('content-type')||'';
-        const j = ct.includes('application/json') ? await r.json() : await r.text();
-        if (!r.ok) throw new Error((j && (j.detail||j.message)) || (r.status+' '+r.statusText));
-        data = j; break;
-      }catch(e){ lastErr=e; }
+    outer: for (const p of endpoints){
+      for (const payload of altPayloads){
+        try{
+          const r = await fetch(API + p, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify(payload)
+          });
+          const ct = r.headers.get('content-type')||'';
+          const j = ct.includes('application/json') ? await r.json() : await r.text();
+          if (!r.ok) {
+            const msg = (j && (j.detail||j.message)) || (r.status+' '+r.statusText);
+            throw new Error(msg);
+          }
+          data = j; break outer;
+        }catch(e){ lastErr=e; }
+      }
     }
+
     if (!data){
-      err.textContent = String(lastErr?.message || 'Не удалось создать бронь');
+      const msg = String(lastErr?.message || 'Не удалось создать бронь');
+      err.textContent = /not\s*found/i.test(msg) ? 'Оффер не найден или истёк. Обновите страницу.' : msg;
       err.style.display='block';
       return;
     }
@@ -285,7 +319,6 @@
         color: { dark:'#000000', light:'#ffffff' }
       }, (err)=>{
         if (err) {
-          // fallback: текст + dataURL
           try {
             const url = canvas.toDataURL('image/png');
             const img = new Image();
@@ -296,7 +329,6 @@
         }
       });
     } else {
-      // ещё один запасной вариант: простая "матрица" из текста
       const ctx = canvas.getContext('2d');
       ctx.fillStyle = '#000';
       ctx.font = '14px monospace';
@@ -317,12 +349,7 @@
   document.addEventListener('change', (e)=>{
     if (e.target.id === 'category' || e.target.id === 'sort') applyFilters();
   });
-
-  // Close on ESC
   document.addEventListener('keydown', (e)=>{ if (e.key==='Escape') closeModal(); });
-
-  // Close on dim or X
-  // уже обработано через [data-close] делегированием
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
