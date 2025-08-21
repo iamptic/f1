@@ -1,5 +1,5 @@
 
-/* Foody Merchant · Reservations list quick styles */
+/* Foody Merchant · Reservations list quick styles (v3) */
 #qr .chips .chip{
   padding:8px 12px; border-radius:12px; border:1px solid var(--border);
   background: rgba(255,255,255,.04); cursor:pointer; user-select:none;
