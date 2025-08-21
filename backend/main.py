@@ -622,19 +622,26 @@ async def delete_offer(offer_id: int, request: Request = None):
 
 # === Public offers feed ===
 @app.get("/api/v1/public/offers")
-async def public_offers(city: str | None = None, category: str | None = None, limit: int = 20, offset: int = 0):
+async def public_offers(
+    city: str | None = None,
+    category: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+):
     """
     Buyer-facing feed of active offers.
     Active = (expires_at is NULL OR expires_at > now()) AND (qty_left is NULL OR qty_left > 0)
     Optional filters: city (by merchants.city, ILIKE %city%), category.
-    Supports simple pagination via limit/offset and returns total count.
+    Returns offer fields + merchant name/phone/address for UI.
     """
-    # guard
     if limit < 1: limit = 1
     if limit > 100: limit = 100
     if offset < 0: offset = 0
 
-    where = ["(o.expires_at IS NULL OR o.expires_at > now())", "(o.qty_left IS NULL OR o.qty_left > 0)"]
+    where = [
+        "(o.expires_at IS NULL OR o.expires_at > now())",
+        "(o.qty_left IS NULL OR o.qty_left > 0)"
+    ]
     params: List[Any] = []
     if city:
         where.append("m.city ILIKE $" + str(len(params)+1))
@@ -644,15 +651,32 @@ async def public_offers(city: str | None = None, category: str | None = None, li
         params.append(category)
 
     where_sql = " AND ".join(where)
+
     count_sql = f"""
         SELECT COUNT(*) AS cnt
-        FROM offers o
-        JOIN merchants m ON m.id = o.restaurant_id
-        WHERE {where_sql}
+          FROM offers o
+          JOIN merchants m ON m.id = o.restaurant_id
+         WHERE {where_sql}
     """
+
+    # ⬇️ добавили поля мерчанта (алиасы для фронта)
     list_sql = f"""
-        SELECT o.id, o.restaurant_id, o.title, o.price_cents, o.original_price_cents, o.qty_total, o.qty_left,
-               o.expires_at, o.image_url, o.category, o.description
+        SELECT
+            o.id,
+            o.restaurant_id,
+            o.title,
+            o.price_cents,
+            o.original_price_cents,
+            o.qty_total,
+            o.qty_left,
+            o.expires_at,
+            o.image_url,
+            o.category,
+            o.description,
+            m.name    AS restaurant_name,
+            m.address AS restaurant_address,
+            m.phone   AS restaurant_phone,
+            m.city    AS restaurant_city
         FROM offers o
         JOIN merchants m ON m.id = o.restaurant_id
         WHERE {where_sql}
@@ -661,18 +685,19 @@ async def public_offers(city: str | None = None, category: str | None = None, li
     """
 
     async with _pool.acquire() as conn:
-        # total
-        row = await conn.fetchrow(count_sql, *params)
-        total = int(row["cnt"]) if row and "cnt" in row else 0
-        # items
-        items = []
+        total_row = await conn.fetchrow(count_sql, *params)
+        total = int(total_row["cnt"]) if total_row else 0
+
         rows = await conn.fetch(list_sql, *params, limit, offset)
+        items: List[Dict[str, Any]] = []
         for r in rows:
             d = dict(r)
             if d.get("expires_at"):
                 d["expires_at"] = d["expires_at"].astimezone(timezone.utc).isoformat()
             items.append(d)
+
         return {"total": total, "limit": limit, "offset": offset, "items": items}
+
 
 # === Reservations helpers & endpoints ===
 
