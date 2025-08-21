@@ -1,4 +1,4 @@
-// buyer/app.js — минимальные правки: название ресторана в карточке + устойчивый QR
+// buyer/app.js — табы категорий + компактные карточки + устойчивый QR + название ресторана
 (() => {
   const $  = (s, r=document) => r.querySelector(s);
   const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
@@ -31,6 +31,19 @@
     (o.restaurant_phone || o.phone || o.merchant_phone || o?.merchant?.phone || o?.restaurant?.phone || o.contact_phone || '') + '';
   const getRestName = (o) =>
     (o.restaurant_name || o.merchant_name || o.name_restaurant || o?.restaurant?.name || o?.merchant?.name || '') + '';
+
+  // ---- Категории (табы)
+  const catMap = {
+    'готовые блюда':'ready_meal','готовое':'ready_meal','горячее':'ready_meal',
+    'выпечка':'bakery','хлеб':'bakery','булочки':'bakery',
+    'роллы':'rolls','ролл':'rolls',
+    'суши':'sushi','роллы и суши':'sushi',
+    'салат':'salad','салаты':'salad',
+    'десерт':'dessert','десерты':'dessert','сладкое':'dessert',
+    'другое':'other','прочее':'other','проч.':'other','other':'other'
+  };
+  const normCat = (v) => { if(!v) return ''; const s=String(v).trim().toLowerCase(); return catMap[s] || s; };
+  let __cat = '';   // выбранная вкладка
 
   // ---- State
   let __offers = [];
@@ -110,6 +123,12 @@
     host.innerHTML = list.map(cardHTML).join('');
   }
 
+  function applyFilters(){
+    let arr = [...__offers];
+    if (__cat) arr = arr.filter(o => normCat(o.category || o.cat || 'other') === __cat);
+    render(arr);
+  }
+
   // ---- Modal + Reserve
   const modal = $('#offerModal');
 
@@ -131,7 +150,6 @@
     const addr = getAddr(o);
     const phone = getPhoneRaw(o);
     const rname = getRestName(o);
-    // если в модалке у тебя есть поля ресторана — разкомментируй:
     if ($('#m_rest'))  $('#m_rest').textContent  = rname || '—';
     if ($('#m_addr'))  $('#m_addr').textContent  = addr  || '—';
     if ($('#m_phone')) {
@@ -175,6 +193,14 @@
         const cur = numOr(inp.value, 1);
         inp.value = Math.max(1, cur + (dir === '+1' ? 1 : -1));
       }
+    }
+
+    // клики по табам категорий
+    const chip = e.target.closest('#catChips .chip');
+    if (chip){
+      __cat = chip.dataset.cat || '';
+      $$('#catChips .chip').forEach(c => c.classList.toggle('active', c===chip));
+      applyFilters();
     }
   });
 
@@ -233,7 +259,7 @@
         } catch(_) { fallback(); }
         return;
       }
-      if (++tries <= 30) return setTimeout(waitAndDraw, 50); // ждём библиотеку до ~1.5с
+      if (++tries <= 30) return setTimeout(waitAndDraw, 50); // ждём либу до ~1.5с
       fallback();
     })();
   }
@@ -306,7 +332,7 @@
   async function init(){
     try {
       __offers = await getOffers();
-      render(__offers);
+      applyFilters(); // сразу прогоним через фильтр (вдруг выбран не "Все")
     } catch(e) {
       const host = $('#offers');
       if (host) host.innerHTML = `<div class="card" style="padding:16px">Ошибка загрузки: ${(e?.message||e)}</div>`;
