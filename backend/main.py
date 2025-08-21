@@ -160,7 +160,7 @@ async def _migrate():
             code TEXT UNIQUE,
             name TEXT,
             phone TEXT,
-            status TEXT NOT NULL DEFAULT 'active', -- active|redeemed|expired|canceled
+            status TEXT NOT NULL DEFAULT 'active',
             expires_at TIMESTAMPTZ,
             created_at TIMESTAMPTZ DEFAULT now(),
             redeemed_at TIMESTAMPTZ
@@ -243,6 +243,7 @@ class LoginRequest(BaseModel):
     login: str
     password: str
 
+# (оставил для совместимости, но расширил)
 class OfferCreate(BaseModel):
     merchant_id: Optional[int] = None
     restaurant_id: int
@@ -346,7 +347,8 @@ async def update_profile(payload: Dict[str, Any] = Body(...), request: Request =
                 address    = COALESCE($4, address),
                 city       = COALESCE($5, city),
                 lat        = COALESCE($6, lat),
-                lng        = COALESCE($7, lng),
+                lng        = COALSE
+                COALESCE($7, lng),
                 open_time  = COALESCE($8, open_time),
                 close_time = COALESCE($9, close_time)
             WHERE id = $1
@@ -527,7 +529,7 @@ async def update_offer(offer_id: int, payload: OfferUpdate = Body(...), request:
         colset = {r["column_name"] for r in cols}
 
         data = payload.dict(exclude_unset=True)
-        updates = {}
+        updates: Dict[str, Any] = {}
 
         if "title" in data: updates["title"] = data["title"]
         if "description" in data: updates["description"] = data["description"]
@@ -563,8 +565,7 @@ async def update_offer(offer_id: int, payload: OfferUpdate = Body(...), request:
             parsed = _parse_expires_at(data["expires_at"]) if data["expires_at"] else None
             updates["expires_at"] = parsed
 
-        set_parts = []
-        values = []
+        set_parts, values = [], []
         idx = 1
         for k, v in updates.items():
             if k not in colset:
@@ -573,7 +574,6 @@ async def update_offer(offer_id: int, payload: OfferUpdate = Body(...), request:
             values.append(v)
             idx += 1
         if not set_parts:
-         # nothing to update; return current row (только существующие колонки)
             row = await conn.fetchrow(
                 """SELECT id, restaurant_id, title,
                           price_cents, original_price_cents,
@@ -612,6 +612,7 @@ async def delete_offer(offer_id: int, request: Request = None):
             raise HTTPException(status_code=404, detail="offer not found")
         restaurant_id = int(offer_row["restaurant_id"] or 0)
         await _require_auth(conn, restaurant_id, api_key)
+
         await conn.execute("DELETE FROM offers WHERE id=$1", offer_id)
         return {"ok": True, "deleted_id": offer_id}
 
@@ -931,7 +932,7 @@ class PublicReservationStatusOut(BaseModel):
     code: Optional[str] = None
     status: str
     expires_at: Optional[str] = None
-    
+
 @app.get("/api/v1/public/reservations/{res}", response_model=PublicReservationStatusOut)
 async def public_reservation_status(res: str):
     async with _pool.acquire() as conn:
