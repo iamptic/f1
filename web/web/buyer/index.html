@@ -4,9 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Foody · Витрина</title>
-  <link rel="stylesheet" href="./style.css?v=vitrine-p1" />
+  <link rel="stylesheet" href="./style.css?v=r3" />
   <script>
-    // PROD API (можно переопределить через window.__FOODY__.FOODY_API)
     window.foodyApi = (window.__FOODY__ && window.__FOODY__.FOODY_API) || 'https://foodyback-production.up.railway.app';
   </script>
 </head>
@@ -14,17 +13,17 @@
   <header class="site-header">
     <div class="wrap">
       <div class="brand">🍽️ Foody</div>
-      <div class="tools">
-        <select id="category" class="nice-select">
-          <option value="">Все категории</option>
-          <option value="ready_meal">Готовые блюда</option>
-          <option value="bakery">Выпечка</option>
-          <option value="sushi">Суши/роллы</option>
-          <option value="salad">Салаты</option>
-          <option value="dessert">Десерты</option>
-          <option value="other">Другое</option>
-        </select>
-        <select id="sort" class="nice-select">
+      <div class="controls">
+        <div id="catChips" class="chips" role="tablist" aria-label="Категории">
+          <button class="chip active" data-cat="">Все</button>
+          <button class="chip" data-cat="ready_meal">Готовые блюда</button>
+          <button class="chip" data-cat="bakery">Выпечка</button>
+          <button class="chip" data-cat="sushi">Суши</button>
+          <button class="chip" data-cat="salad">Салаты</button>
+          <button class="chip" data-cat="dessert">Десерты</button>
+          <button class="chip" data-cat="other">Другое</button>
+        </div>
+        <select id="sort" class="nice-select" aria-label="Сортировка">
           <option value="soon">По сроку (раньше истекают)</option>
           <option value="discount">По скидке (больше → выше)</option>
           <option value="price_asc">Цена (дешевле → выше)</option>
@@ -102,8 +101,7 @@
 
   <div id="toast"></div>
 
-  <!-- QR генератор (надежный) -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" defer></script>
-  <script src="./app.js?v=vit-r1" defer></script>
+  <script src="./app.js?v=r3" defer></script>
 </body>
 </html>

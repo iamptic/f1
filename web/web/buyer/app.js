@@ -1,4 +1,3 @@
-// buyer/app.js — vitrine patch r2 (address/phone mapping + robust reservation)
 (() => {
   const $ = (s, r=document) => r.querySelector(s);
   const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
@@ -19,33 +18,18 @@
     try { return new Date(x).toLocaleString('ru-RU', { dateStyle:'short', timeStyle:'short' }); }
     catch(_) { return '—'; }
   };
-
-  // ---- Address / phone resolvers (расширенные)
-  function getAddr(o){
-    // top-level
-    const top = (o.restaurant_address || o.address || o.merchant_address || o.vendor_address || '').trim();
-    if (top) return top;
-    // nested
-    const r = o.restaurant || o.merchant || o.vendor || o.place || o.shop || {};
-    return (r.address || r.addr || r.location || '').trim();
-  }
-  function getPhoneRaw(o){
-    // top-level
-    const top = (o.restaurant_phone || o.merchant_phone || o.vendor_phone || o.phone || o.contact_phone || '').toString().trim();
-    if (top) return top;
-    // nested
-    const r = o.restaurant || o.merchant || o.vendor || o.place || o.shop || {};
-    return (r.phone || r.contact_phone || r.tel || '').toString().trim();
-  }
+  const getAddr = (o) => (o.restaurant_address || o.address || o.merchant_address || o.merchant?.address || o.restaurant?.address || '').trim();
+  const getPhoneRaw = (o) => (o.restaurant_phone || o.phone || o.merchant_phone || o.merchant?.phone || o.restaurant?.phone || o.contact_phone || '').toString().trim();
   const telLink = (p) => {
-    const d = (p||'').replace(/[^\d+]/g,'');
+    const d = p.replace(/[^\d+]/g,'');
     if (!d) return '#';
     return d.startsWith('+') ? `tel:${d}` : `tel:+${d}`;
   };
-  const numOr = (v, def=1) => { const n = parseInt(String(v||'').trim(), 10); return isFinite(n)&&n>0 ? n : def; };
+  const numOr = (v, def=0) => (isFinite(+v) ? +v : def);
 
   // ---- State
   let __offers = [];
+  let __cat = '';
 
   // ---- Fetch & render
   async function getOffers(){
@@ -121,10 +105,9 @@
 
   // ---- Sorting / Filtering
   function applyFilters(){
-    const cat = $('#category')?.value || '';
     const sort = $('#sort')?.value || 'soon';
     let arr = [...__offers];
-    if (cat) arr = arr.filter(o => (o.category || o.cat || 'other') === cat);
+    if (__cat) arr = arr.filter(o => (o.category || o.cat || 'other') === __cat);
 
     const priceOf = o => (o.price_cents!=null ? o.price_cents/100 : (o.price ?? 0));
     const oldOf   = o => (o.original_price_cents!=null ? o.original_price_cents/100 : (o.original_price ?? 0));
@@ -146,10 +129,8 @@
   // ---- Modal + Reserve
   const modal = $('#offerModal');
   function openModal(o){
-    // image
     const img = o.image_url || o.photo_url || '';
     $('#m_img').innerHTML = img ? `<img src="${img}" alt="">` : `<div class="ph" style="height:100%;display:grid;place-items:center;font-size:48px">🍱</div>`;
-    // text
     $('#m_title').textContent = o.title || o.name || 'Без названия';
     const desc = (o.description || o.desc || '').trim();
     $('#m_desc').textContent = desc || '';
@@ -202,9 +183,16 @@
       const next = Math.max(1, cur + (dir === '+1' ? 1 : -1));
       inp.value = next;
     }
+
+    const chip = e.target.closest('#catChips .chip');
+    if (chip){
+      __cat = chip.dataset.cat || '';
+      $$('#catChips .chip').forEach(c => c.classList.toggle('active', c===chip));
+      applyFilters();
+    }
   });
 
-  // Phone mask
+  // Phone mask (простая)
   function formatRuPhone(d){
     if (!d) return '+7 ';
     if (d[0]==='8') d='7'+d.slice(1);
@@ -225,7 +213,7 @@
     phoneInput.addEventListener('input',h); phoneInput.addEventListener('blur',h); h();
   }
 
-  // Reserve → QR (расширенные эндпоинты + алиасы)
+  // Reserve → QR
   async function reserve(){
     const id = modal.dataset.offerId;
     if (!id) return;
@@ -253,8 +241,7 @@
       '/api/v1/reservations/public',
       '/api/v1/reservations',
       `/api/v1/public/offers/${encodeURIComponent(id)}/reserve`,
-      '/api/v1/public/reservations/create',
-      '/api/v1/public/booking'
+      '/api/v1/public/reserve'  // ваш основной
     ];
 
     let data=null, lastErr=null;
@@ -347,7 +334,7 @@
   }
 
   document.addEventListener('change', (e)=>{
-    if (e.target.id === 'category' || e.target.id === 'sort') applyFilters();
+    if (e.target.id === 'sort') applyFilters();
   });
   document.addEventListener('keydown', (e)=>{ if (e.key==='Escape') closeModal(); });
 
