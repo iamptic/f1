@@ -20,9 +20,9 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--text);
 
 .filters{position:sticky;top:58px;z-index:35;background:rgba(14,17,22,.7);backdrop-filter:blur(12px);border-bottom:1px solid var(--brd)}
 .filters .row{width:min(1100px,96%);margin:8px auto;display:flex;gap:8px;flex-wrap:nowrap}
-.two-lanes{display:flex;justify-content:space-between;gap:10px}
+/* separate two ribbons to avoid overlap */
+.two-lanes{display:flex;gap:10px}
 .two-lanes > .chips{flex:1;min-width:0}
-
 .chips{display:flex;gap:8px;align-items:center}
 .chips.scroll{overflow-x:auto;scroll-snap-type:x proximity;padding-bottom:4px}
 .chips.scroll::-webkit-scrollbar{height:6px}
@@ -33,7 +33,7 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--text);
 
 .content{width:min(1100px,96%);margin:14px auto;display:grid;gap:14px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
-.card{background:var(--card);border:1px solid var(--brd);border-radius:16px;overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.15)}
+.card{background:var(--card);border:1px solid var(--brd);border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}
 .card img{width:100%;height:140px;object-fit:cover;background:#0d1218}
 .card .p{padding:10px}
 .price{font-weight:800}
@@ -70,15 +70,20 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--text);
 .qr-info{margin-top:6px}
 .qr-code-line{font-size:16px}
 
+/* qty control */
+.qty-wrap{margin-top:10px}
+.qty-label{display:block;margin-bottom:6px;color:#9aa7b5;font-size:12px}
+.qty-ctrl{display:flex;gap:8px;align-items:center}
+.qty-ctrl .btn.qty{width:40px;height:40px;display:grid;place-items:center;border-radius:12px}
+.qty-ctrl input{width:80px;text-align:center;background:#0f141c;color:var(--text);border:1px solid var(--brd);border-radius:12px;padding:10px}
+
 #toast{position:fixed;right:12px;bottom:16px;display:grid;gap:8px;z-index:80}
 .toast{background:#0f141c;border:1px solid var(--brd);border-left:6px solid var(--accent2);padding:10px 12px;border-radius:12px}
 
-
-/* === Foody buyer header layout fix (keep 'Моя гео' in place) === */
+/* keep header layout sane */
 .appbar{flex-wrap:nowrap}
 .appbar .left{flex:1 1 auto; min-width:0}
 .appbar .tit{min-width:0; overflow:hidden}
 .appbar .tit .t, .appbar .tit .s{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%}
 .appbar .right{flex:0 0 auto; white-space:nowrap}
-/* ensure the geo button won't shrink awkwardly */
 #geoBtn{flex:0 0 auto}
