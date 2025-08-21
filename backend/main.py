@@ -27,6 +27,7 @@ RECOVERY_SECRET = os.getenv("RECOVERY_SECRET", "foodyDevRecover123")
 RESERVATION_TTL_MINUTES = int(getenv("RESERVATION_TTL_MINUTES", "30"))
 
 app = FastAPI(title=APP_NAME, version="1.1")
+
 # --- QR как PNG (стабильно, без CDN) ---
 try:
     import segno  # чистый Python, без PIL
@@ -93,7 +94,6 @@ async def _migrate():
             created_at TIMESTAMPTZ DEFAULT now()
         );
         """)
-        # add missing columns if table existed
         for ddl in [
             "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS login TEXT;",
             "ALTER TABLE merchants ADD COLUMN IF NOT EXISTS auth_login TEXT;",
@@ -102,7 +102,6 @@ async def _migrate():
         ]:
             await conn.execute(ddl)
 
-        # backfill login
         await conn.execute("""
         UPDATE merchants
            SET login = COALESCE(NULLIF(login,''), NULLIF(auth_login,''), NULLIF(phone,''), email)
@@ -134,7 +133,6 @@ async def _migrate():
         );
         """)
 
-        # ensure columns exist and backfill
         cols = await conn.fetch("""
             SELECT column_name FROM information_schema.columns
             WHERE table_name='offers' AND table_schema=current_schema()
@@ -144,19 +142,16 @@ async def _migrate():
         if "merchant_id" not in colset:
             await conn.execute("ALTER TABLE offers ADD COLUMN IF NOT EXISTS merchant_id INTEGER;")
             colset.add("merchant_id")
-
         if "restaurant_id" not in colset:
             await conn.execute("ALTER TABLE offers ADD COLUMN IF NOT EXISTS restaurant_id INTEGER;")
             colset.add("restaurant_id")
-
         if "created_at" not in colset:
             await conn.execute("ALTER TABLE offers ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();")
 
-        # backfill (на всякий случай для уже существующих строк)
         await conn.execute("UPDATE offers SET restaurant_id = COALESCE(restaurant_id, merchant_id) WHERE restaurant_id IS NULL;")
         await conn.execute("UPDATE offers SET merchant_id   = COALESCE(merchant_id, restaurant_id) WHERE merchant_id IS NULL;")
 
-        # === NEW: reservations table (for buyer reservations & merchant redemption) ===
+        # reservations
         await conn.execute("""
         CREATE TABLE IF NOT EXISTS reservations (
             id SERIAL PRIMARY KEY,
@@ -171,7 +166,6 @@ async def _migrate():
             redeemed_at TIMESTAMPTZ
         );
         """)
-        # indexes
         await conn.execute("CREATE INDEX IF NOT EXISTS reservations_offer_idx ON reservations(offer_id);")
         await conn.execute("CREATE INDEX IF NOT EXISTS reservations_restaurant_idx ON reservations(restaurant_id);")
         await conn.execute("CREATE INDEX IF NOT EXISTS reservations_status_idx ON reservations(status);")
@@ -211,10 +205,10 @@ def _parse_time(val: Any) -> Optional[dtime]:
         try:
             h = int(parts[0])
             m = int(parts[1]) if len(parts) > 1 else 0
-            s = int(parts[2]) if len(parts) > 2 else 0
-            if h == 24 and m == 0 and s == 0:
+            sec = int(parts[2]) if len(parts) > 2 else 0
+            if h == 24 and m == 0 and sec == 0:
                 return dtime(23, 59, 59)
-            return dtime(h, m, s)
+            return dtime(h, m, sec)
         except Exception:
             return None
     return None
@@ -249,7 +243,6 @@ class LoginRequest(BaseModel):
     login: str
     password: str
 
-# (оставил для совместимости, но расширил)
 class OfferCreate(BaseModel):
     merchant_id: Optional[int] = None
     restaurant_id: int
@@ -407,11 +400,9 @@ async def create_offer(payload: OfferCreate, request: Request):
     """
     api_key = _get_api_key(request)
     async with _pool.acquire() as conn:
-        # authorize by merchant_id or restaurant_id
         rid = int(payload.merchant_id or payload.restaurant_id)
         await _require_auth(conn, rid, api_key)
 
-        # numbers
         price_val = float(payload.price or 0)
         original_val = float(payload.original_price) if payload.original_price is not None else None
         price_cents = int(round(price_val * 100)) if payload.price is not None else None
@@ -424,10 +415,8 @@ async def create_offer(payload: OfferCreate, request: Request):
         if not expires:
             raise HTTPException(status_code=400, detail="invalid expires_at")
 
-        # image url must not be NULL for strict schemas
         image_url = (payload.image_url or "").strip()
 
-        # Attempt 1: wide schema (float + cents)
         try:
             row = await conn.fetchrow(
                 """
@@ -458,7 +447,6 @@ async def create_offer(payload: OfferCreate, request: Request):
                 image_url, payload.category, payload.description
             )
         except Exception:
-            # Attempt 2: cents-only schema
             try:
                 row = await conn.fetchrow(
                     """
@@ -484,7 +472,6 @@ async def create_offer(payload: OfferCreate, request: Request):
                     image_url, payload.category, payload.description
                 )
             except Exception:
-                # Attempt 3: float-only schema
                 row = await conn.fetchrow(
                     """
                     INSERT INTO offers (
@@ -511,14 +498,14 @@ async def create_offer(payload: OfferCreate, request: Request):
                 )
         return {"id": row["id"]}
 
-# --- PATCH/DELETE for offers (additive, safe) ---
+# --- PATCH/DELETE for offers ---
 class OfferUpdate(BaseModel):
     title: Optional[str] = None
     price: Optional[float] = None
     original_price: Optional[float] = None
     qty_total: Optional[int] = None
     qty_left: Optional[int] = None
-    expires_at: Optional[str] = None  # ISO string
+    expires_at: Optional[str] = None
     image_url: Optional[str] = None
     category: Optional[str] = None
     description: Optional[str] = None
@@ -527,14 +514,12 @@ class OfferUpdate(BaseModel):
 async def update_offer(offer_id: int, payload: OfferUpdate = Body(...), request: Request = None):
     api_key = _get_api_key(request) if request else ""
     async with _pool.acquire() as conn:
-        # get owning restaurant
         offer_row = await conn.fetchrow("SELECT id, restaurant_id, qty_total, qty_left FROM offers WHERE id=$1", offer_id)
         if not offer_row:
             raise HTTPException(status_code=404, detail="offer not found")
         restaurant_id = int(offer_row["restaurant_id"] or 0)
         await _require_auth(conn, restaurant_id, api_key)
 
-        # columns present in table
         cols = await conn.fetch("""
             SELECT column_name FROM information_schema.columns
             WHERE table_name='offers' AND table_schema=current_schema()
@@ -542,8 +527,6 @@ async def update_offer(offer_id: int, payload: OfferUpdate = Body(...), request:
         colset = {r["column_name"] for r in cols}
 
         data = payload.dict(exclude_unset=True)
-
-        # Consistency for price/original_price and *_cents if columns exist
         updates = {}
 
         if "title" in data: updates["title"] = data["title"]
@@ -551,7 +534,6 @@ async def update_offer(offer_id: int, payload: OfferUpdate = Body(...), request:
         if "category" in data: updates["category"] = data["category"]
         if "image_url" in data: updates["image_url"] = (data["image_url"] or "").strip()
 
-        # numbers
         if "price" in data and data["price"] is not None:
             price_val = float(data["price"])
             if "price" in colset:
@@ -566,7 +548,6 @@ async def update_offer(offer_id: int, payload: OfferUpdate = Body(...), request:
             if "original_price_cents" in colset:
                 updates["original_price_cents"] = int(round(orig_val * 100))
 
-        # qty / validation
         current_qty_total = offer_row["qty_total"]
         current_qty_left = offer_row["qty_left"]
         new_qty_total = data.get("qty_total", current_qty_total)
@@ -578,12 +559,10 @@ async def update_offer(offer_id: int, payload: OfferUpdate = Body(...), request:
         if "qty_left" in data and "qty_left" in colset:
             updates["qty_left"] = int(new_qty_left)
 
-        # expires_at
         if "expires_at" in data:
             parsed = _parse_expires_at(data["expires_at"]) if data["expires_at"] else None
             updates["expires_at"] = parsed
 
-        # Build dynamic UPDATE limited to existing columns
         set_parts = []
         values = []
         idx = 1
@@ -594,7 +573,6 @@ async def update_offer(offer_id: int, payload: OfferUpdate = Body(...), request:
             values.append(v)
             idx += 1
         if not set_parts:
-            # nothing to update; return current row
             row = await conn.fetchrow(
                 """SELECT id, restaurant_id, title, price, price_cents, original_price, original_price_cents,
                           qty_total, qty_left, expires_at, image_url, category, description
@@ -610,7 +588,6 @@ async def update_offer(offer_id: int, payload: OfferUpdate = Body(...), request:
         query = f"UPDATE offers SET {', '.join(set_parts)} WHERE id = ${idx}"
         await conn.execute(query, *values)
 
-        # return updated object in same shape used by list endpoint
         row = await conn.fetchrow(
             """SELECT id, restaurant_id, title, price_cents, original_price_cents, qty_total, qty_left,
                       expires_at, image_url, category, description
@@ -633,16 +610,14 @@ async def delete_offer(offer_id: int, request: Request = None):
             raise HTTPException(status_code=404, detail="offer not found")
         restaurant_id = int(offer_row["restaurant_id"] or 0)
         await _require_auth(conn, restaurant_id, api_key)
-
         await conn.execute("DELETE FROM offers WHERE id=$1", offer_id)
-        # return 200 JSON to avoid follow-up 404 on the front
         return {"ok": True, "deleted_id": offer_id}
 
 # === Public offers feed ===
 @app.get("/api/v1/public/offers")
 async def public_offers(
-    city: str | None = None,
-    category: str | None = None,
+    city: Optional[str] = None,
+    category: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
 ):
@@ -677,7 +652,6 @@ async def public_offers(
          WHERE {where_sql}
     """
 
-    # ⬇️ добавили поля мерчанта (алиасы для фронта)
     list_sql = f"""
         SELECT
             o.id,
@@ -716,11 +690,9 @@ async def public_offers(
 
         return {"total": total, "limit": limit, "offset": offset, "items": items}
 
-
 # === Reservations helpers & endpoints ===
 
 async def _expire_reservations(conn: asyncpg.Connection, restaurant_id: Optional[int] = None) -> int:
-    """Expire overdue active reservations and return count of affected rows. Also return qty to offers."""
     params: List[Any] = []
     cond = "status='active' AND expires_at IS NOT NULL AND expires_at <= now()"
     if restaurant_id:
@@ -747,16 +719,8 @@ class PublicReserveOut(BaseModel):
 
 @app.post("/api/v1/public/reserve", response_model=PublicReserveOut)
 async def public_reserve(payload: PublicReserveIn = Body(...)):
-    """
-    Reserve one unit for an offer:
-      - only if offer is active (not expired) and qty_left > 0
-      - atomically decrement qty_left
-      - create reservation with expires_at = now + TTL
-    Returns: { id, offer_id, code, expires_at }
-    """
     async with _pool.acquire() as conn:
         async with conn.transaction():
-            # lock offer to avoid races
             row = await conn.fetchrow(
                 """
                 SELECT id, restaurant_id, qty_left, expires_at
@@ -777,7 +741,6 @@ async def public_reserve(payload: PublicReserveIn = Body(...)):
             if qty_left is not None and qty_left <= 0:
                 raise HTTPException(status_code=400, detail="sold out")
 
-            # decrement qty_left if tracked
             if qty_left is not None:
                 upd = await conn.execute(
                     "UPDATE offers SET qty_left = qty_left - 1 WHERE id = $1 AND qty_left > 0",
@@ -786,9 +749,7 @@ async def public_reserve(payload: PublicReserveIn = Body(...)):
                 if not upd.endswith("1"):
                     raise HTTPException(status_code=409, detail="no stock")
 
-            # create reservation
             r_expires = now + timedelta(minutes=RESERVATION_TTL_MINUTES)
-            # generate unique code
             code = None
             for _ in range(5):
                 c = _short_code(6)
@@ -816,7 +777,6 @@ async def public_reserve(payload: PublicReserveIn = Body(...)):
             return out
 
 def _parse_res_identifier(res: str) -> Tuple[str, Optional[int]]:
-    """Return ('id' or 'code', value)"""
     if res.isdigit():
         return ("id", int(res))
     return ("code", res)
@@ -845,7 +805,6 @@ async def merchant_reservations(
     api_key = _get_api_key(request)
     async with _pool.acquire() as conn:
         await _require_auth(conn, restaurant_id, api_key)
-        # expire overdue before listing
         if status and status not in ('active','redeemed','expired','canceled'):
             raise HTTPException(status_code=400, detail='invalid status')
         await _expire_reservations(conn, restaurant_id)
@@ -885,7 +844,6 @@ async def merchant_reservation_redeem(res: str, restaurant_id: Optional[int] = Q
     api_key = _get_api_key(request) if request else ""
     key, val = _parse_res_identifier(res)
     async with _pool.acquire() as conn:
-        # find reservation & check auth
         if key == "id":
             r = await conn.fetchrow("SELECT * FROM reservations WHERE id=$1", val)
         else:
@@ -895,19 +853,16 @@ async def merchant_reservation_redeem(res: str, restaurant_id: Optional[int] = Q
         rid = r["restaurant_id"]
         await _require_auth(conn, rid, api_key)
 
-        # expire overdue first
         await _expire_reservations(conn, rid)
 
         if r["status"] != "active":
             raise HTTPException(status_code=400, detail="not active")
         if r["expires_at"] and r["expires_at"] <= datetime.now(timezone.utc):
-            # mark expired
             await conn.execute("UPDATE reservations SET status='expired' WHERE id=$1", r["id"])
             await conn.execute("UPDATE offers SET qty_left = qty_left + 1 WHERE id=$1 AND qty_left IS NOT NULL", r["offer_id"])
             raise HTTPException(status_code=400, detail="expired")
 
         await conn.execute("UPDATE reservations SET status='redeemed', redeemed_at=now() WHERE id=$1", r["id"])
-        # nothing to do with qty_left (it was decremented at reserve time)
         rr = await conn.fetchrow("SELECT id, offer_id, restaurant_id, code, status, expires_at, created_at, redeemed_at, name, phone FROM reservations WHERE id=$1", r["id"])
         d = dict(rr)
         for k in ("expires_at", "created_at", "redeemed_at"):
@@ -920,7 +875,6 @@ async def merchant_reservation_cancel(res: str, restaurant_id: Optional[int] = Q
     api_key = _get_api_key(request) if request else ""
     key, val = _parse_res_identifier(res)
     async with _pool.acquire() as conn:
-        # find reservation & check auth
         if key == "id":
             r = await conn.fetchrow("SELECT * FROM reservations WHERE id=$1", val)
         else:
@@ -930,13 +884,11 @@ async def merchant_reservation_cancel(res: str, restaurant_id: Optional[int] = Q
         rid = r["restaurant_id"]
         await _require_auth(conn, rid, api_key)
 
-        # expire overdue first
         await _expire_reservations(conn, rid)
 
         if r["status"] != "active":
             raise HTTPException(status_code=400, detail="not active")
 
-        # cancel and return qty
         await conn.execute("UPDATE reservations SET status='canceled' WHERE id=$1", r["id"])
         await conn.execute("UPDATE offers SET qty_left = qty_left + 1 WHERE id=$1 AND qty_left IS NOT NULL", r["offer_id"])
         rr = await conn.fetchrow("SELECT id, offer_id, restaurant_id, code, status, expires_at, created_at, redeemed_at, name, phone FROM reservations WHERE id=$1", r["id"])
@@ -971,22 +923,16 @@ async def change_password(payload: dict = Body(...), request: Request = None):
         await conn.execute("UPDATE merchants SET password_hash=$2 WHERE id=$1", restaurant_id, _hash_password(new_password))
         return {"ok": True}
 
-
 class PublicReservationStatusOut(BaseModel):
     id: int
     offer_id: int
-    code: str | None = None
+    code: Optional[str] = None
     status: str
-    expires_at: str | None = None
+    expires_at: Optional[str] = None
 
 @app.get("/api/v1/public/reservations/{res}", response_model=PublicReservationStatusOut)
 async def public_reservation_status(res: str):
-    """
-    Public endpoint to check reservation status by id or code.
-    Does not reveal PII (name/phone). Intended for buyer polling after reserve.
-    """
     async with _pool.acquire() as conn:
-        # Try by id numeric else by code
         row = None
         if res.isdigit():
             row = await conn.fetchrow(
