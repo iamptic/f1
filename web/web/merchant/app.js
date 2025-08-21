@@ -838,6 +838,11 @@ async function postOfferStrict(payload) {
   }
 
 
+// Bind reservations controls
+on('#resvRefresh','click', () => loadReservations(true));
+on('#resvStatus','change', () => loadReservations(true));
+on('#resvSearch','input', (e) => { const v = (e.target && e.target.value) || ''; clearTimeout(window.__resvKeyTimer); window.__resvKeyTimer = setTimeout(()=> loadReservations(true), 300); });
+
 document.addEventListener('DOMContentLoaded', () => {
     try {
       // Universal [data-tab] router (incl. dashboard buttons)
@@ -1055,7 +1060,7 @@ function loadReservations(reset=false){
         st.offset += list.length;
         const merged = st.items.concat(list);
         st.items = uniqBy(merged, x => x.id ?? x.code ?? x._id ?? `${x.offer_id||''}:${x.created_at||''}`);
-        renderReservations(st.items);
+        renderReservationsList(st.items);
       }
     }).catch(()=>{});
   }catch(e){ console.error(e); }
@@ -1067,6 +1072,21 @@ const STATUS_LABELS = { active:'Активная', redeemed:'Погашена', 
 
 // Safe render for reservations list (QR tab)
 function renderReservationsList(items){
+
+// Delegated actions in reservations list
+(function(){
+  const wrap = document.getElementById('res_rows') || document.getElementById('reservationsBody') || document.getElementById('tbody');
+  if (!wrap) return;
+  wrap.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const code = btn.getAttribute('data-code') || '';
+    if (!code) return;
+    if (btn.dataset.action === 'redeem') redeem(code);
+    if (btn.dataset.action === 'cancel') cancelRes(code);
+  });
+})();
+
   const wrap = document.getElementById('res_rows') || document.getElementById('reservationsBody') || document.getElementById('tbody');
   if (!wrap) return;
   wrap.innerHTML = '';
