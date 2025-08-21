@@ -573,8 +573,10 @@ async def update_offer(offer_id: int, payload: OfferUpdate = Body(...), request:
             values.append(v)
             idx += 1
         if not set_parts:
+         # nothing to update; return current row (только существующие колонки)
             row = await conn.fetchrow(
-                """SELECT id, restaurant_id, title, price, price_cents, original_price, original_price_cents,
+                """SELECT id, restaurant_id, title,
+                          price_cents, original_price_cents,
                           qty_total, qty_left, expires_at, image_url, category, description
                    FROM offers WHERE id=$1""",
                 offer_id
@@ -929,7 +931,7 @@ class PublicReservationStatusOut(BaseModel):
     code: Optional[str] = None
     status: str
     expires_at: Optional[str] = None
-
+    
 @app.get("/api/v1/public/reservations/{res}", response_model=PublicReservationStatusOut)
 async def public_reservation_status(res: str):
     async with _pool.acquire() as conn:
