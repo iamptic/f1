@@ -3,7 +3,7 @@ import os
 from typing import Any, Dict, Optional, Set, List, Tuple
 
 import asyncpg
-from fastapi import FastAPI, HTTPException, Body, Request, Query
+from fastapi import FastAPI, HTTPException, Body, Request, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from datetime import datetime, timezone, time as dtime, timedelta
@@ -27,6 +27,24 @@ RECOVERY_SECRET = os.getenv("RECOVERY_SECRET", "foodyDevRecover123")
 RESERVATION_TTL_MINUTES = int(getenv("RESERVATION_TTL_MINUTES", "30"))
 
 app = FastAPI(title=APP_NAME, version="1.1")
+# --- QR как PNG (стабильно, без CDN) ---
+try:
+    import segno  # чистый Python, без PIL
+except Exception:
+    segno = None
+
+@app.get("/api/v1/public/qr/{text}.png")
+async def public_qr_png(text: str):
+    if segno is None:
+        raise HTTPException(status_code=501, detail="QR generator not available on server")
+    try:
+        import io
+        qr = segno.make(text, error='m')  # EC level M
+        buf = io.BytesIO()
+        qr.save(buf, kind="png", scale=6, border=2)  # ~240x240
+        return Response(buf.getvalue(), media_type="image/png")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"qr render failed: {e}")
 
 app.add_middleware(
     CORSMiddleware,
