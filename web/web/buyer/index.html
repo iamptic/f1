@@ -57,14 +57,27 @@
       <div class="modal-b">
         <img id="sImg" alt="">
         <div class="meta">
-          <div id="sPrice" class="price">—</div>
-          <div id="sOld" class="old">—</div>
-          <div id="sQty" class="qty">—</div>
-          <div id="sExp" class="exp">—</div>
-          <div id="sLeft" class="muted">—</div>
+          <div class="row">
+            <div id="sPrice" class="price">—</div>
+            <div id="sOld" class="old">—</div>
+          </div>
+          <div class="row"><div id="sQty" class="qty">—</div></div>
+          <div class="row"><div id="sExp" class="exp">—</div> <div id="sLeft" class="muted">—</div></div>
         </div>
+
+        <div class="contact">
+          <div id="sAddr">Адрес не указан</div>
+          <div id="sPhone">Телефон не указан</div>
+        </div>
+
         <div id="sDesc" class="desc">—</div>
+
         <div class="actions">
+          <div class="qty-ctrl">
+            <button id="qtyDec" class="btn icon" aria-label="Уменьшить">−</button>
+            <input id="qtyInput" type="number" min="1" value="1" inputmode="numeric" />
+            <button id="qtyInc" class="btn icon" aria-label="Увеличить">+</button>
+          </div>
           <button id="reserveBtn" class="btn primary">Забронировать</button>
         </div>
       </div>

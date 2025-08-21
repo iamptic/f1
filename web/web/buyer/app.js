@@ -56,6 +56,7 @@
   let offers = [];
   let total = null, offset=0, LO=12, loading=false;
   let currentOffer = null;
+  let qty = 1, qtyMax = 1;
 
   // ====== UI refs
   const grid = $('#grid'), gridSkeleton = $('#gridSkeleton');
@@ -201,17 +202,22 @@
       const el = document.createElement('div'); el.className='card';
       const disc = o.__disc, left = timeLeft(o.expires_at);
       const km = (o.__dist!=null) ? `~${o.__dist.toFixed(1)} км` : '';
+      const hasOld = (o.original_price_cents||0) > (o.price_cents||0);
+      const oldText = hasOld ? Math.round((o.original_price_cents||0)/100) + " ₽" : "";
       el.innerHTML = `
         ${o.image_url ? `<img src="${o.image_url}" alt="">` : `<div style="height:140px;background:#0d1218"></div>`}
         <div class="p">
           <div class="price">
-            ${money(o.price_cents)}
+            <span>${money(o.price_cents)}</span>
+            ${hasOld?`<span class="old small">${oldText}</span>`:''}
             ${disc?`<span class="badge">-${disc}%</span>`:''}
             ${left?`<span class="badge left">${left}</span>`:''}
             ${km?`<span class="badge left">${km}</span>`:''}
           </div>
           <div>${o.title||'—'}</div>
-          <div class="meta"><span>Осталось: ${o.qty_left ?? '—'}</span>${o.category?`<span class="badge">${labelCat(o.category)}</span>`:''}</div>
+          <div class="meta">
+            <div class="row"><span>Осталось: ${o.qty_left ?? '—'}</span>${o.category?`<span class="badge">${labelCat(o.category)}</span>`:''}</div>
+          </div>
         </div>`;
       el.onclick = () => openOffer(o);
       grid.appendChild(el);
@@ -251,6 +257,8 @@
   // ====== Offer sheet + reserve + QR
   function openOffer(o){
     currentOffer = o;
+    qtyMax = Math.max(1, Number(o.qty_left ?? 1));
+    qty = 1;
     $('#sTitle').textContent = o.title||'—';
     $('#sImg').src = o.image_url||'';
     $('#sPrice').textContent = money(o.price_cents);
@@ -259,16 +267,64 @@
     $('#sExp').textContent = o.expires_at? new Date(o.expires_at).toLocaleString('ru-RU'):'—';
     $('#sLeft').textContent = timeLeft(o.expires_at)? ('Осталось: '+timeLeft(o.expires_at)) : '—';
     $('#sDesc').textContent = o.description||'';
+
+    // address & phone
+    const addr = o.restaurant_address || o.address || o.addr || '';
+    const phone = o.restaurant_phone || o.phone || o.restaurant_phone_number || '';
+    $('#sAddr').textContent = addr ? addr : 'Адрес не указан';
+    const phoneEl = $('#sPhone');
+    if (phone){
+      phoneEl.innerHTML = `Телефон: <a href="tel:${String(phone).replace(/[^+\d]/g,'')}">${phone}</a>`;
+    } else {
+      phoneEl.textContent = 'Телефон не указан';
+    }
+
+    // qty UI
+    const qtyInput = $('#qtyInput');
+    qtyInput.value = String(qty);
+    qtyInput.min = "1";
+    qtyInput.max = String(qtyMax);
+
     setModal('#sheet', true);
+    updateReserveBtnTotal();
   }
   $('#sheetClose').onclick = () => setModal('#sheet', false);
+
+  function clampQty(v){
+    v = Math.floor(Number(v)||1);
+    if (v<1) v=1;
+    if (v>qtyMax) v=qtyMax;
+    return v;
+  }
+  function updateReserveBtnTotal(){
+    const o = currentOffer; if(!o) return;
+    const total = Math.round(((o.price_cents||0)*qty)/100);
+    $('#reserveBtn').textContent = `Забронировать (${qty} • ${total} ₽)`;
+  }
+
+  $('#qtyDec').onclick = () => {
+    qty = clampQty(qty-1);
+    $('#qtyInput').value = String(qty);
+    updateReserveBtnTotal();
+  };
+  $('#qtyInc').onclick = () => {
+    qty = clampQty(qty+1);
+    $('#qtyInput').value = String(qty);
+    updateReserveBtnTotal();
+  };
+  $('#qtyInput').oninput = (e) => {
+    qty = clampQty(e.target.value);
+    e.target.value = String(qty);
+    updateReserveBtnTotal();
+  };
 
   $('#reserveBtn').onclick = async () => {
     const o = currentOffer; if(!o) return;
     try{
+      const body = { offer_id: o.id || o.offer_id, name:'Гость', phone:'', qty };
       const resp = await fetch(API + '/api/v1/public/reserve', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ offer_id: o.id || o.offer_id, name:'Гость', phone:'' })
+        body: JSON.stringify(body)
       });
       const data = await resp.json().catch(()=>({}));
       if(!resp.ok){
@@ -280,7 +336,7 @@
       toast('Забронировано ✅');
       // локально уменьшим остаток
       const it = offers.find(x => x.id===o.id || x.offer_id===o.offer_id);
-      if (it && typeof it.qty_left==='number') it.qty_left = Math.max(0, it.qty_left-1);
+      if (it && typeof it.qty_left==='number') it.qty_left = Math.max(0, it.qty_left-qty);
       render();
       setModal('#sheet', false);
 
