@@ -1,13 +1,12 @@
+// buyer/app.js — минимальные правки: название ресторана в карточке + устойчивый QR
 (() => {
-  const $ = (s, r=document) => r.querySelector(s);
+  const $  = (s, r=document) => r.querySelector(s);
   const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
   const API = ((window.__FOODY__ && window.__FOODY__.FOODY_API) || window.foodyApi || '').replace(/\/+$/,'');
-  const toastBox = $('#toast');
-  const toast = (t)=>{ const el=document.createElement('div');el.className='toast';el.textContent=t;toastBox.appendChild(el);setTimeout(()=>el.remove(),2500); };
 
   // ---- Helpers
   const fmtMoney = n => (isFinite(+n) ? (Math.round(+n) + ' ₽') : '—');
-  const safeNum = v => { const n = Number(v); return isFinite(n) ? n : 0; };
+  const safeNum  = v => { const n = Number(v); return isFinite(n) ? n : 0; };
   const discount = (old, now) => {
     const o = safeNum(old), p = safeNum(now);
     if (!(o>0 && p>0) || p>=o) return 0;
@@ -18,20 +17,25 @@
     try { return new Date(x).toLocaleString('ru-RU', { dateStyle:'short', timeStyle:'short' }); }
     catch(_) { return '—'; }
   };
-  const getAddr = (o) => (o.restaurant_address || o.address || o.merchant_address || o.merchant?.address || o.restaurant?.address || '').trim();
-  const getPhoneRaw = (o) => (o.restaurant_phone || o.phone || o.merchant_phone || o.merchant?.phone || o.restaurant?.phone || o.contact_phone || '').toString().trim();
   const telLink = (p) => {
-    const d = p.replace(/[^\d+]/g,'');
+    const d = String(p||'').replace(/[^\d+]/g,'');
     if (!d) return '#';
     return d.startsWith('+') ? `tel:${d}` : `tel:+${d}`;
   };
-  const numOr = (v, def=0) => (isFinite(+v) ? +v : def);
+  const numOr = (v, def=1) => { const n = parseInt(String(v||'').trim(), 10); return isFinite(n)&&n>0 ? n : def; };
+
+  // Адрес/телефон/название с учетом разных ключей
+  const getAddr = (o) =>
+    (o.restaurant_address || o.address || o.merchant_address || o?.merchant?.address || o?.restaurant?.address || '') + '';
+  const getPhoneRaw = (o) =>
+    (o.restaurant_phone || o.phone || o.merchant_phone || o?.merchant?.phone || o?.restaurant?.phone || o.contact_phone || '') + '';
+  const getRestName = (o) =>
+    (o.restaurant_name || o.merchant_name || o.name_restaurant || o?.restaurant?.name || o?.merchant?.name || '') + '';
 
   // ---- State
   let __offers = [];
-  let __cat = '';
 
-  // ---- Fetch & render
+  // ---- Fetch
   async function getOffers(){
     const endpoints = [
       '/api/v1/public/offers',
@@ -52,11 +56,12 @@
     throw lastErr || new Error('Не удалось загрузить офферы');
   }
 
+  // ---- Card
   function cardHTML(o){
-    const id = o.id ?? o.offer_id ?? o._id ?? '';
-    const img = o.image_url || o.photo_url || '';
+    const id    = o.id ?? o.offer_id ?? o._id ?? '';
+    const img   = o.image_url || o.photo_url || '';
     const title = o.title || o.name || 'Без названия';
-    const desc = (o.description || o.desc || '').trim();
+    const desc  = (o.description || o.desc || '').trim();
     const price = (o.price_cents!=null ? o.price_cents/100 : (o.price ?? 0));
     const old   = (o.original_price_cents!=null ? o.original_price_cents/100 : (o.original_price ?? 0));
     const pct   = discount(old, price);
@@ -65,6 +70,7 @@
 
     const addr  = getAddr(o);
     const phone = getPhoneRaw(o);
+    const rname = getRestName(o);
 
     return `
       <div class="offer-card" data-id="${id}">
@@ -73,6 +79,7 @@
         </div>
         <div class="offer-card__body">
           <div class="offer-card__title" title="${title}">${title}</div>
+          ${rname ? `<div class="offer-card__rest">🏪 ${rname}</div>` : ''}
           ${desc ? `<div class="offer-card__desc">${desc}</div>` : ''}
 
           <div class="price">
@@ -103,37 +110,14 @@
     host.innerHTML = list.map(cardHTML).join('');
   }
 
-  // ---- Sorting / Filtering
-  function applyFilters(){
-    const sort = $('#sort')?.value || 'soon';
-    let arr = [...__offers];
-    if (__cat) arr = arr.filter(o => (o.category || o.cat || 'other') === __cat);
-
-    const priceOf = o => (o.price_cents!=null ? o.price_cents/100 : (o.price ?? 0));
-    const oldOf   = o => (o.original_price_cents!=null ? o.original_price_cents/100 : (o.original_price ?? 0));
-    const pctOf   = o => discount(oldOf(o), priceOf(o));
-    const dtOf    = o => {
-      const s = o.expires_at || o.expires || o.until;
-      const d = s ? new Date(s) : null;
-      return d ? +d : Infinity;
-    };
-
-    if (sort === 'discount') arr.sort((a,b)=> pctOf(b)-pctOf(a));
-    else if (sort === 'price_asc') arr.sort((a,b)=> priceOf(a)-priceOf(b));
-    else if (sort === 'price_desc') arr.sort((a,b)=> priceOf(b)-priceOf(a));
-    else arr.sort((a,b)=> dtOf(a)-dtOf(b)); // soon
-
-    render(arr);
-  }
-
   // ---- Modal + Reserve
   const modal = $('#offerModal');
+
   function openModal(o){
     const img = o.image_url || o.photo_url || '';
     $('#m_img').innerHTML = img ? `<img src="${img}" alt="">` : `<div class="ph" style="height:100%;display:grid;place-items:center;font-size:48px">🍱</div>`;
     $('#m_title').textContent = o.title || o.name || 'Без названия';
-    const desc = (o.description || o.desc || '').trim();
-    $('#m_desc').textContent = desc || '';
+    $('#m_desc').textContent  = (o.description || o.desc || '').trim() || '';
 
     const price = (o.price_cents!=null ? o.price_cents/100 : (o.price ?? 0));
     const old   = (o.original_price_cents!=null ? o.original_price_cents/100 : (o.original_price ?? 0));
@@ -144,22 +128,30 @@
     const mBadge = $('#m_badge');
     if (pct) { mBadge.style.display=''; mBadge.textContent = `-${pct}%`; } else { mBadge.style.display='none'; }
 
-    const addr = getAddr(o); const phone = getPhoneRaw(o);
-    $('#m_addr').textContent = addr || '—';
-    const mPhone = $('#m_phone');
-    mPhone.textContent = phone || '—';
-    mPhone.href = phone ? telLink(phone) : '#';
+    const addr = getAddr(o);
+    const phone = getPhoneRaw(o);
+    const rname = getRestName(o);
+    // если в модалке у тебя есть поля ресторана — разкомментируй:
+    if ($('#m_rest'))  $('#m_rest').textContent  = rname || '—';
+    if ($('#m_addr'))  $('#m_addr').textContent  = addr  || '—';
+    if ($('#m_phone')) {
+      const mPhone = $('#m_phone');
+      mPhone.textContent = phone || '—';
+      mPhone.href = phone ? telLink(phone) : '#';
+    }
 
     const until = fmtDT(o.expires_at || o.expires || o.until);
-    $('#m_until').textContent = until;
-    $('#m_until_wrap').style.display = until ? '' : 'none';
+    if ($('#m_until')) {
+      $('#m_until').textContent = until;
+      if ($('#m_until_wrap')) $('#m_until_wrap').style.display = until ? '' : 'none';
+    }
 
     const left = o.qty_left ?? o.qty ?? o.quantity ?? o.qty_total ?? 0;
-    $('#m_left').textContent = left ? `(доступно: ${left})` : '';
-    $('#m_qty').value = 1;
+    if ($('#m_left')) $('#m_left').textContent = left ? `(доступно: ${left})` : '';
+    if ($('#m_qty'))  $('#m_qty').value = 1;
 
-    $('#m_err').style.display = 'none';
-    $('#qr_wrap').style.display = 'none';
+    if ($('#m_err')) $('#m_err').style.display = 'none';
+    if ($('#qr_wrap')) $('#qr_wrap').style.display = 'none';
 
     modal.setAttribute('aria-hidden','false');
     modal.dataset.offerId = o.id ?? o.offer_id ?? '';
@@ -179,20 +171,14 @@
     if (qbtn){
       const dir = qbtn.getAttribute('data-qty');
       const inp = $('#m_qty');
-      const cur = numOr(inp.value, 1);
-      const next = Math.max(1, cur + (dir === '+1' ? 1 : -1));
-      inp.value = next;
-    }
-
-    const chip = e.target.closest('#catChips .chip');
-    if (chip){
-      __cat = chip.dataset.cat || '';
-      $$('#catChips .chip').forEach(c => c.classList.toggle('active', c===chip));
-      applyFilters();
+      if (inp){
+        const cur = numOr(inp.value, 1);
+        inp.value = Math.max(1, cur + (dir === '+1' ? 1 : -1));
+      }
     }
   });
 
-  // Phone mask (простая)
+  // Маска телефона (простая RU)
   function formatRuPhone(d){
     if (!d) return '+7 ';
     if (d[0]==='8') d='7'+d.slice(1);
@@ -213,40 +199,75 @@
     phoneInput.addEventListener('input',h); phoneInput.addEventListener('blur',h); h();
   }
 
+  // ---- QR: рисуем только когда блок уже показан
+  function drawQR(text){
+    const canvas = document.getElementById('qr_canvas');
+    if (!canvas) return;
+
+    // белая подложка (без «черного квадрата»)
+    try {
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+    } catch(_){}
+
+    const fallback = () => {
+      try {
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#000';
+        ctx.font = '14px monospace';
+        ctx.fillText('QR недоступен', 70, 120);
+      } catch(_){}
+    };
+
+    let tries = 0;
+    (function waitAndDraw(){
+      if (window.QRCode && typeof window.QRCode.toCanvas === 'function') {
+        try {
+          window.QRCode.toCanvas(
+            canvas,
+            String(text),
+            { errorCorrectionLevel:'M', margin:2, scale:6, color:{ dark:'#000000', light:'#ffffff' } },
+            (err)=>{ if (err) fallback(); }
+          );
+        } catch(_) { fallback(); }
+        return;
+      }
+      if (++tries <= 30) return setTimeout(waitAndDraw, 50); // ждём библиотеку до ~1.5с
+      fallback();
+    })();
+  }
+
   // Reserve → QR
   async function reserve(){
     const id = modal.dataset.offerId;
     if (!id) return;
-    const qty = Math.max(1, parseInt($('#m_qty').value||'1',10));
-    const phoneDigits = ( $('#m_user_phone').value || '' ).replace(/\D+/g,'');
+
+    const qty = Math.max(1, parseInt($('#m_qty')?.value || '1',10));
+    const phoneDigits = ( $('#m_user_phone')?.value || '' ).replace(/\D+/g,'');
     const err = $('#m_err');
-    err.style.display='none';
+    if (err) err.style.display='none';
 
     if (phoneDigits.length < 11){
-      err.textContent = 'Введите телефон в формате +7 900 000 00 00';
-      err.style.display='block';
+      if (err){ err.textContent = 'Введите телефон в формате +7 900 000 00 00'; err.style.display='block'; }
       return;
     }
 
-    const basePayload = { offer_id: id, qty, phone: phoneDigits };
-    const altPayloads = [
-      basePayload,
+    const payloads = [
+      { offer_id: id, qty, phone: phoneDigits },
       { offerId: id, qty, phone: phoneDigits },
-      { offer_id: id, quantity: qty, phone: phoneDigits },
       { id, qty, phone: phoneDigits }
     ];
-
     const endpoints = [
       '/api/v1/public/reservations',
       '/api/v1/reservations/public',
       '/api/v1/reservations',
-      `/api/v1/public/offers/${encodeURIComponent(id)}/reserve`,
-      '/api/v1/public/reserve'  // ваш основной
+      '/api/v1/public/reserve'
     ];
 
     let data=null, lastErr=null;
     outer: for (const p of endpoints){
-      for (const payload of altPayloads){
+      for (const payload of payloads){
         try{
           const r = await fetch(API + p, {
             method:'POST',
@@ -255,77 +276,42 @@
           });
           const ct = r.headers.get('content-type')||'';
           const j = ct.includes('application/json') ? await r.json() : await r.text();
-          if (!r.ok) {
-            const msg = (j && (j.detail||j.message)) || (r.status+' '+r.statusText);
-            throw new Error(msg);
-          }
+          if (!r.ok) throw new Error((j && (j.detail||j.message)) || (r.status+' '+r.statusText));
           data = j; break outer;
         }catch(e){ lastErr=e; }
       }
     }
 
     if (!data){
-      const msg = String(lastErr?.message || 'Не удалось создать бронь');
-      err.textContent = /not\s*found/i.test(msg) ? 'Оффер не найден или истёк. Обновите страницу.' : msg;
-      err.style.display='block';
+      const msg = lastErr?.message || String(lastErr) || 'Не удалось создать бронь';
+      if (err){ err.textContent = /not\s*found/i.test(msg) ? 'Оффер не найден или истёк. Обновите страницу.' : msg; err.style.display='block'; }
       return;
     }
 
     const code = data.code || data.reservation_code || data.id || data.qr || '';
     if (!code){
-      err.textContent = 'Сервер не вернул код брони';
-      err.style.display='block';
+      if (err){ err.textContent = 'Сервер не вернул код брони'; err.style.display='block'; }
       return;
     }
-$('#qr_code_text').textContent = code;
-$('#qr_wrap').style.display = '';
-await new Promise(requestAnimationFrame); // даём layout произойти
-drawQR(code);
-toast('Бронь создана. Показан QR-код.');
 
+    // Показать блок заранее → дождаться layout → рисовать
+    if ($('#qr_code_text')) $('#qr_code_text').textContent = code;
+    if ($('#qr_wrap')) { $('#qr_wrap').style.display = ''; await new Promise(requestAnimationFrame); }
+    drawQR(code);
+  }
 
   $('#m_reserve')?.addEventListener('click', reserve);
 
-  // Надежная отрисовка QR (белая подложка + fallback)
-  function drawQR(text){
-  const canvas = document.getElementById('qr_canvas');
-  if (!canvas) return;
-
-  // белая подложка (чтобы не было «черного квадрата»)
-  try {
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  } catch(_) {}
-
-  const fallback = () => {
+  // ---- Init
+  async function init(){
     try {
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#000';
-      ctx.font = '14px monospace';
-      ctx.fillText('QR недоступен', 70, 120);
-    } catch(_) {}
-  };
-
-  // подождём библиотеку до ~1.5с (30 * 50мс)
-  let tries = 0;
-  (function waitAndDraw(){
-    if (window.QRCode && typeof window.QRCode.toCanvas === 'function') {
-      try {
-        window.QRCode.toCanvas(
-          canvas,
-          String(text),
-          { errorCorrectionLevel:'M', margin:2, scale:6, color:{ dark:'#000000', light:'#ffffff' } },
-          (err) => { if (err) fallback(); }
-        );
-      } catch(_) { fallback(); }
-      return;
+      __offers = await getOffers();
+      render(__offers);
+    } catch(e) {
+      const host = $('#offers');
+      if (host) host.innerHTML = `<div class="card" style="padding:16px">Ошибка загрузки: ${(e?.message||e)}</div>`;
     }
-    if (++tries <= 30) return setTimeout(waitAndDraw, 50);
-    // не дождались — покажем понятный текст
-    fallback();
-  })();
-}
+  }
 
   document.addEventListener('keydown', (e)=>{ if (e.key==='Escape') closeModal(); });
 
