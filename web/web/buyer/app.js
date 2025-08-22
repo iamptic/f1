@@ -1,4 +1,4 @@
-// buyer/app.js — минимальные правки: название ресторана в карточке + устойчивый QR
+// buyer/app.js — фикс QR (скрытый canvas), фильтр табов, сортировка, ресторан в карточке
 (() => {
   const $  = (s, r=document) => r.querySelector(s);
   const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
@@ -7,7 +7,7 @@
   // ---- Helpers
   const fmtMoney = n => (isFinite(+n) ? (Math.round(+n) + ' ₽') : '—');
   const safeNum  = v => { const n = Number(v); return isFinite(n) ? n : 0; };
-  const discount = (old, now) => {
+  const discountPct = (old, now) => {
     const o = safeNum(old), p = safeNum(now);
     if (!(o>0 && p>0) || p>=o) return 0;
     return Math.round((1 - p/o) * 100);
@@ -24,7 +24,7 @@
   };
   const numOr = (v, def=1) => { const n = parseInt(String(v||'').trim(), 10); return isFinite(n)&&n>0 ? n : def; };
 
-  // Адрес/телефон/название с учетом разных ключей
+  // Адрес/телефон/название (под разные ключи)
   const getAddr = (o) =>
     (o.restaurant_address || o.address || o.merchant_address || o?.merchant?.address || o?.restaurant?.address || '') + '';
   const getPhoneRaw = (o) =>
@@ -34,6 +34,8 @@
 
   // ---- State
   let __offers = [];
+  let __cat = '';                // активная категория
+  let __sort = 'soon';           // активная сортировка
 
   // ---- Fetch
   async function getOffers(){
@@ -64,7 +66,7 @@
     const desc  = (o.description || o.desc || '').trim();
     const price = (o.price_cents!=null ? o.price_cents/100 : (o.price ?? 0));
     const old   = (o.original_price_cents!=null ? o.original_price_cents/100 : (o.original_price ?? 0));
-    const pct   = discount(old, price);
+    const pct   = discountPct(old, price);
     const until = fmtDT(o.expires_at || o.expires || o.until);
     const qty   = o.qty_left ?? o.qty ?? o.quantity ?? o.qty_total ?? 0;
 
@@ -110,58 +112,49 @@
     host.innerHTML = list.map(cardHTML).join('');
   }
 
-  // ---- Modal + Reserve
-  const modal = $('#offerModal');
-
-  function openModal(o){
-    const img = o.image_url || o.photo_url || '';
-    $('#m_img').innerHTML = img ? `<img src="${img}" alt="">` : `<div class="ph" style="height:100%;display:grid;place-items:center;font-size:48px">🍱</div>`;
-    $('#m_title').textContent = o.title || o.name || 'Без названия';
-    $('#m_desc').textContent  = (o.description || o.desc || '').trim() || '';
-
-    const price = (o.price_cents!=null ? o.price_cents/100 : (o.price ?? 0));
-    const old   = (o.original_price_cents!=null ? o.original_price_cents/100 : (o.original_price ?? 0));
-    const pct   = discount(old, price);
-    $('#m_price_now').textContent = fmtMoney(price);
-    const mOld = $('#m_price_old');
-    if (old) { mOld.style.display=''; mOld.textContent = fmtMoney(old); } else { mOld.style.display='none'; }
-    const mBadge = $('#m_badge');
-    if (pct) { mBadge.style.display=''; mBadge.textContent = `-${pct}%`; } else { mBadge.style.display='none'; }
-
-    const addr = getAddr(o);
-    const phone = getPhoneRaw(o);
-    const rname = getRestName(o);
-    // если в модалке у тебя есть поля ресторана — разкомментируй:
-    if ($('#m_rest'))  $('#m_rest').textContent  = rname || '—';
-    if ($('#m_addr'))  $('#m_addr').textContent  = addr  || '—';
-    if ($('#m_phone')) {
-      const mPhone = $('#m_phone');
-      mPhone.textContent = phone || '—';
-      mPhone.href = phone ? telLink(phone) : '#';
+  // ---- Filter + Sort
+  const norm = (v) => String(v||'').trim().toLowerCase();
+  function filtered(){
+    let arr = [...__offers];
+    if (__cat) {
+      arr = arr.filter(o => norm(o.category) === norm(__cat));
     }
+    // sort
+    arr.sort((a, b) => {
+      const aPrice = (a.price_cents!=null ? a.price_cents/100 : (a.price ?? 0));
+      const bPrice = (b.price_cents!=null ? b.price_cents/100 : (b.price ?? 0));
+      const aOld   = (a.original_price_cents!=null ? a.original_price_cents/100 : (a.original_price ?? 0));
+      const bOld   = (b.original_price_cents!=null ? b.original_price_cents/100 : (b.original_price ?? 0));
+      const aPct   = discountPct(aOld, aPrice);
+      const bPct   = discountPct(bOld, bPrice);
+      const aExp   = a.expires_at || a.expires || a.until || '';
+      const bExp   = b.expires_at || b.expires || b.until || '';
+      const ad = aExp ? +new Date(aExp) : Infinity;
+      const bd = bExp ? +new Date(bExp) : Infinity;
 
-    const until = fmtDT(o.expires_at || o.expires || o.until);
-    if ($('#m_until')) {
-      $('#m_until').textContent = until;
-      if ($('#m_until_wrap')) $('#m_until_wrap').style.display = until ? '' : 'none';
-    }
-
-    const left = o.qty_left ?? o.qty ?? o.quantity ?? o.qty_total ?? 0;
-    if ($('#m_left')) $('#m_left').textContent = left ? `(доступно: ${left})` : '';
-    if ($('#m_qty'))  $('#m_qty').value = 1;
-
-    if ($('#m_err')) $('#m_err').style.display = 'none';
-    if ($('#qr_wrap')) $('#qr_wrap').style.display = 'none';
-
-    modal.setAttribute('aria-hidden','false');
-    modal.dataset.offerId = o.id ?? o.offer_id ?? '';
+      switch (__sort){
+        case 'discount':   return (bPct - aPct) || (aPrice - bPrice);
+        case 'price_asc':  return (aPrice - bPrice);
+        case 'price_desc': return (bPrice - aPrice);
+        case 'soon':
+        default:           return (ad - bd);
+      }
+    });
+    return arr;
   }
-  function closeModal(){ modal.setAttribute('aria-hidden','true'); }
+  function rerender(){ render(filtered()); }
 
+  // клики по чипсам категорий
   document.addEventListener('click', (e)=>{
-    const btn = e.target.closest('[data-open]');
-    if (btn){
-      const id = btn.getAttribute('data-open');
+    const chip = e.target.closest('#catChips .chip');
+    if (chip){
+      __cat = chip.dataset.cat || '';
+      $$('#catChips .chip').forEach(c => c.classList.toggle('active', c===chip));
+      rerender();
+    }
+    const openBtn = e.target.closest('[data-open]');
+    if (openBtn){
+      const id = openBtn.getAttribute('data-open');
       const item = __offers.find(x => String(x.id ?? x.offer_id ?? '') === String(id));
       if (item) openModal(item);
     }
@@ -177,6 +170,9 @@
       }
     }
   });
+
+  // сортировка
+  $('#sort')?.addEventListener('change', (e)=>{ __sort = e.target.value || 'soon'; rerender(); });
 
   // Маска телефона (простая RU)
   function formatRuPhone(d){
@@ -238,8 +234,9 @@
     })();
   }
 
-  // Reserve → QR
+  // Reserve → QR (сначала показать блок, затем rAF, затем рисовать)
   async function reserve(){
+    const modal = $('#offerModal');
     const id = modal.dataset.offerId;
     if (!id) return;
 
@@ -262,7 +259,7 @@
       '/api/v1/public/reservations',
       '/api/v1/reservations/public',
       '/api/v1/reservations',
-      '/api/v1/public/reserve'
+      '/api/v1/public/reserve'     // наш основной
     ];
 
     let data=null, lastErr=null;
@@ -294,7 +291,6 @@
       return;
     }
 
-    // Показать блок заранее → дождаться layout → рисовать
     if ($('#qr_code_text')) $('#qr_code_text').textContent = code;
     if ($('#qr_wrap')) { $('#qr_wrap').style.display = ''; await new Promise(requestAnimationFrame); }
     drawQR(code);
@@ -302,19 +298,64 @@
 
   $('#m_reserve')?.addEventListener('click', reserve);
 
+  // ---- Modal
+  const modal = $('#offerModal');
+
+  function openModal(o){
+    const img = o.image_url || o.photo_url || '';
+    $('#m_img').innerHTML = img ? `<img src="${img}" alt="">` : `<div class="ph" style="height:100%;display:grid;place-items:center;font-size:48px">🍱</div>`;
+    $('#m_title').textContent = o.title || o.name || 'Без названия';
+    $('#m_desc').textContent  = (o.description || o.desc || '').trim() || '';
+
+    const price = (o.price_cents!=null ? o.price_cents/100 : (o.price ?? 0));
+    const old   = (o.original_price_cents!=null ? o.original_price_cents/100 : (o.original_price ?? 0));
+    const pct   = discountPct(old, price);
+    $('#m_price_now').textContent = fmtMoney(price);
+    const mOld = $('#m_price_old');
+    if (old) { mOld.style.display=''; mOld.textContent = fmtMoney(old); } else { mOld.style.display='none'; }
+    const mBadge = $('#m_badge');
+    if (pct) { mBadge.style.display=''; mBadge.textContent = `-${pct}%`; } else { mBadge.style.display='none'; }
+
+    const addr = getAddr(o);
+    const phone = getPhoneRaw(o);
+    const rname = getRestName(o);
+    if ($('#m_rest'))  $('#m_rest').textContent  = rname || '—';
+    if ($('#m_addr'))  $('#m_addr').textContent  = addr  || '—';
+    if ($('#m_phone')) {
+      const mPhone = $('#m_phone');
+      mPhone.textContent = phone || '—';
+      mPhone.href = phone ? telLink(phone) : '#';
+    }
+
+    const until = fmtDT(o.expires_at || o.expires || o.until);
+    if ($('#m_until')) {
+      $('#m_until').textContent = until;
+      if ($('#m_until_wrap')) $('#m_until_wrap').style.display = until ? '' : 'none';
+    }
+
+    const left = o.qty_left ?? o.qty ?? o.quantity ?? o.qty_total ?? 0;
+    if ($('#m_left')) $('#m_left').textContent = left ? `(доступно: ${left})` : '';
+    if ($('#m_qty'))  $('#m_qty').value = 1;
+
+    if ($('#m_err')) $('#m_err').style.display = 'none';
+    if ($('#qr_wrap')) $('#qr_wrap').style.display = 'none';
+
+    modal.setAttribute('aria-hidden','false');
+    modal.dataset.offerId = o.id ?? o.offer_id ?? '';
+  }
+  function closeModal(){ modal.setAttribute('aria-hidden','true'); }
+  document.addEventListener('keydown', (e)=>{ if (e.key==='Escape') closeModal(); });
+
   // ---- Init
   async function init(){
     try {
       __offers = await getOffers();
-      render(__offers);
+      rerender();
     } catch(e) {
       const host = $('#offers');
       if (host) host.innerHTML = `<div class="card" style="padding:16px">Ошибка загрузки: ${(e?.message||e)}</div>`;
     }
   }
-
-  document.addEventListener('keydown', (e)=>{ if (e.key==='Escape') closeModal(); });
-
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();
