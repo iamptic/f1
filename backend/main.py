@@ -17,7 +17,7 @@ APP_NAME = "Foody API"
 DATABASE_URL = os.getenv("DATABASE_URL") or "postgresql://postgres:postgres@localhost:5432/postgres"
 RUN_MIGRATIONS = os.getenv("RUN_MIGRATIONS", "1") == "1"
 
-# --- CORS: single, explicit config (cookies not used) ---
+# --- CORS ---
 CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()] or [
     "https://foodyweb-production.up.railway.app",
     "https://foodybot-production.up.railway.app",
@@ -28,9 +28,9 @@ RESERVATION_TTL_MINUTES = int(getenv("RESERVATION_TTL_MINUTES", "30"))
 
 app = FastAPI(title=APP_NAME, version="1.1")
 
-# --- QR как PNG (стабильно, без CDN) ---
+# --- QR как PNG ---
 try:
-    import segno  # чистый Python, без PIL
+    import segno
 except Exception:
     segno = None
 
@@ -40,9 +40,9 @@ async def public_qr_png(text: str):
         raise HTTPException(status_code=501, detail="QR generator not available on server")
     try:
         import io
-        qr = segno.make(text, error='m')  # EC level M
+        qr = segno.make(text, error='m')
         buf = io.BytesIO()
-        qr.save(buf, kind="png", scale=6, border=2)  # ~240x240
+        qr.save(buf, kind="png", scale=6, border=2)
         return Response(buf.getvalue(), media_type="image/png")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"qr render failed: {e}")
@@ -74,7 +74,6 @@ async def _migrate():
     if not RUN_MIGRATIONS:
         return
     async with _pool.acquire() as conn:
-        # merchants
         await conn.execute("""
         CREATE TABLE IF NOT EXISTS merchants (
             id SERIAL PRIMARY KEY,
@@ -114,7 +113,6 @@ async def _migrate():
         """)
         await conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS merchants_login_unique ON merchants(login);")
 
-        # offers
         await conn.execute("""
         CREATE TABLE IF NOT EXISTS offers (
             id SERIAL PRIMARY KEY,
@@ -141,17 +139,14 @@ async def _migrate():
 
         if "merchant_id" not in colset:
             await conn.execute("ALTER TABLE offers ADD COLUMN IF NOT EXISTS merchant_id INTEGER;")
-            colset.add("merchant_id")
         if "restaurant_id" not in colset:
             await conn.execute("ALTER TABLE offers ADD COLUMN IF NOT EXISTS restaurant_id INTEGER;")
-            colset.add("restaurant_id")
         if "created_at" not in colset:
             await conn.execute("ALTER TABLE offers ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();")
 
         await conn.execute("UPDATE offers SET restaurant_id = COALESCE(restaurant_id, merchant_id) WHERE restaurant_id IS NULL;")
         await conn.execute("UPDATE offers SET merchant_id   = COALESCE(merchant_id, restaurant_id) WHERE merchant_id IS NULL;")
 
-        # reservations
         await conn.execute("""
         CREATE TABLE IF NOT EXISTS reservations (
             id SERIAL PRIMARY KEY,
@@ -203,14 +198,12 @@ def _parse_time(val: Any) -> Optional[dtime]:
             return None
         parts = s.split(":")
         try:
-            h = int(parts[0])
-            m = int(parts[1]) if len(parts) > 1 else 0
-            sec = int(parts[2]) if len(parts) > 2 else 0
-            if h == 24 and m == 0 and sec == 0:
-                return dtime(23, 59, 59)
-            return dtime(h, m, sec)
+          h = int(parts[0]); m = int(parts[1]) if len(parts) > 1 else 0; sec = int(parts[2]) if len(parts) > 2 else 0
+          if h == 24 and m == 0 and sec == 0:
+              return dtime(23, 59, 59)
+          return dtime(h, m, sec)
         except Exception:
-            return None
+          return None
     return None
 
 def _parse_expires_at(s: str) -> Optional[datetime]:
@@ -243,7 +236,6 @@ class LoginRequest(BaseModel):
     login: str
     password: str
 
-# (оставил для совместимости, но расширил)
 class OfferCreate(BaseModel):
     merchant_id: Optional[int] = None
     restaurant_id: int
@@ -347,8 +339,7 @@ async def update_profile(payload: Dict[str, Any] = Body(...), request: Request =
                 address    = COALESCE($4, address),
                 city       = COALESCE($5, city),
                 lat        = COALESCE($6, lat),
-                lng        = COALSE
-                COALESCE($7, lng),
+                lng        = COALESCE($7, lng),
                 open_time  = COALESCE($8, open_time),
                 close_time = COALESCE($9, close_time)
             WHERE id = $1
@@ -380,7 +371,6 @@ async def list_offers(restaurant_id: int, request: Request):
             out.append(d)
         return out
 
-# повторное объявление оставлено для совместимости кода ниже
 class OfferCreate(BaseModel):
     merchant_id: Optional[int] = None
     restaurant_id: int
@@ -396,10 +386,6 @@ class OfferCreate(BaseModel):
 
 @app.post("/api/v1/merchant/offers")
 async def create_offer(payload: OfferCreate, request: Request):
-    """
-    Safe insert for offers: writes both merchant_id and restaurant_id,
-    coalesces image_url to non-null string, supports price/price_cents schemas.
-    """
     api_key = _get_api_key(request)
     async with _pool.acquire() as conn:
         rid = int(payload.merchant_id or payload.restaurant_id)
@@ -423,19 +409,11 @@ async def create_offer(payload: OfferCreate, request: Request):
             row = await conn.fetchrow(
                 """
                 INSERT INTO offers (
-                    merchant_id,
-                    restaurant_id,
-                    title,
-                    price,
-                    price_cents,
-                    original_price,
-                    original_price_cents,
-                    qty_total,
-                    qty_left,
-                    expires_at,
-                    image_url,
-                    category,
-                    description
+                    merchant_id, restaurant_id, title,
+                    price, price_cents,
+                    original_price, original_price_cents,
+                    qty_total, qty_left, expires_at,
+                    image_url, category, description
                 )
                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
                 RETURNING id
@@ -453,17 +431,10 @@ async def create_offer(payload: OfferCreate, request: Request):
                 row = await conn.fetchrow(
                     """
                     INSERT INTO offers (
-                        merchant_id,
-                        restaurant_id,
-                        title,
-                        price_cents,
-                        original_price_cents,
-                        qty_total,
-                        qty_left,
-                        expires_at,
-                        image_url,
-                        category,
-                        description
+                        merchant_id, restaurant_id, title,
+                        price_cents, original_price_cents,
+                        qty_total, qty_left, expires_at,
+                        image_url, category, description
                     )
                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
                     RETURNING id
@@ -477,17 +448,10 @@ async def create_offer(payload: OfferCreate, request: Request):
                 row = await conn.fetchrow(
                     """
                     INSERT INTO offers (
-                        merchant_id,
-                        restaurant_id,
-                        title,
-                        price,
-                        original_price,
-                        qty_total,
-                        qty_left,
-                        expires_at,
-                        image_url,
-                        category,
-                        description
+                        merchant_id, restaurant_id, title,
+                        price, original_price,
+                        qty_total, qty_left, expires_at,
+                        image_url, category, description
                     )
                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
                     RETURNING id
@@ -500,7 +464,6 @@ async def create_offer(payload: OfferCreate, request: Request):
                 )
         return {"id": row["id"]}
 
-# --- PATCH/DELETE for offers ---
 class OfferUpdate(BaseModel):
     title: Optional[str] = None
     price: Optional[float] = None
@@ -624,12 +587,6 @@ async def public_offers(
     limit: int = 20,
     offset: int = 0,
 ):
-    """
-    Buyer-facing feed of active offers.
-    Active = (expires_at is NULL OR expires_at > now()) AND (qty_left is NULL OR qty_left > 0)
-    Optional filters: city (by merchants.city, ILIKE %city%), category.
-    Returns offer fields + merchant name/phone/address for UI.
-    """
     if limit < 1: limit = 1
     if limit > 100: limit = 100
     if offset < 0: offset = 0
@@ -657,21 +614,12 @@ async def public_offers(
 
     list_sql = f"""
         SELECT
-            o.id,
-            o.restaurant_id,
-            o.title,
-            o.price_cents,
-            o.original_price_cents,
-            o.qty_total,
-            o.qty_left,
-            o.expires_at,
-            o.image_url,
-            o.category,
-            o.description,
-            m.name    AS restaurant_name,
-            m.address AS restaurant_address,
-            m.phone   AS restaurant_phone,
-            m.city    AS restaurant_city
+            o.id, o.restaurant_id, o.title,
+            o.price_cents, o.original_price_cents,
+            o.qty_total, o.qty_left, o.expires_at,
+            o.image_url, o.category, o.description,
+            m.name AS restaurant_name, m.address AS restaurant_address,
+            m.phone AS restaurant_phone, m.city AS restaurant_city
         FROM offers o
         JOIN merchants m ON m.id = o.restaurant_id
         WHERE {where_sql}
@@ -693,7 +641,7 @@ async def public_offers(
 
         return {"total": total, "limit": limit, "offset": offset, "items": items}
 
-# === Reservations helpers & endpoints ===
+# === Reservations
 
 async def _expire_reservations(conn: asyncpg.Connection, restaurant_id: Optional[int] = None) -> int:
     params: List[Any] = []
@@ -766,13 +714,9 @@ async def public_reserve(payload: PublicReserveIn = Body(...)):
                 VALUES ($1, $2, $3, $4, $5, 'active', $6, $7)
                 RETURNING id, offer_id, code, expires_at
                 """,
-                payload.offer_id,
-                row["restaurant_id"],
-                code,
-                (payload.name or "").strip(),
-                (payload.phone or "").strip(),
-                r_expires,
-                now,
+                payload.offer_id, row["restaurant_id"], code,
+                (payload.name or "").strip(), (payload.phone or "").strip(),
+                r_expires, now,
             )
             out = dict(res)
             if out.get("expires_at"):
