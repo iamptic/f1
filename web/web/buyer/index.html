@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Foody · Витрина</title>
-  <link rel="stylesheet" href="./style.css?v=r3" />
+  <link rel="stylesheet" href="./style.css?v=r4" />
   <script>
     window.foodyApi = (window.__FOODY__ && window.__FOODY__.FOODY_API) || 'https://foodyback-production.up.railway.app';
   </script>
@@ -41,7 +41,7 @@
     </div>
   </main>
 
-  <!-- Модалка оффера -->
+  <!-- Модалка оффера (без QR) -->
   <div id="offerModal" class="modal" aria-hidden="true">
     <div class="modal-dim" data-close></div>
     <div class="modal-card">
@@ -88,13 +88,23 @@
           <button id="m_reserve" class="btn btn-primary">Забронировать</button>
           <div id="m_err" class="form-error" style="display:none"></div>
         </div>
+      </div>
+    </div>
+  </div>
 
-        <div id="qr_wrap" class="qr" style="display:none">
-          <div class="qr-title">Ваш QR-код брони</div>
-          <canvas id="qr_canvas" width="240" height="240"></canvas>
-          <div class="qr-code" id="qr_code_text"></div>
-          <div class="qr-hint">Покажите QR на кассе. Код действителен до указанного времени оффера.</div>
-        </div>
+  <!-- Отдельная модалка с QR -->
+  <div id="qrModal" class="modal" aria-hidden="true">
+    <div class="modal-dim" data-close></div>
+    <div class="modal-card qr-card">
+      <button class="modal-close" data-close aria-label="Закрыть">×</button>
+      <div class="qr-body">
+        <h3 class="qr-title">Ваш QR‑код брони</h3>
+        <!-- PNG с сервера -->
+        <img id="qr_img" alt="QR-код" width="240" height="240" class="qr-img" />
+        <!-- Фолбэк canvas -->
+        <canvas id="qr_canvas" width="240" height="240" class="qr-canvas" style="display:none"></canvas>
+        <div class="qr-code" id="qr_code_text"></div>
+        <div class="qr-hint">Покажите QR на кассе. Если картинка не загрузилась — отобразится резервный QR.</div>
       </div>
     </div>
   </div>
@@ -102,6 +112,6 @@
   <div id="toast"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" defer></script>
-  <script src="./app.js?v=r3" defer></script>
+  <script src="./app.js?v=r4" defer></script>
 </body>
 </html>
